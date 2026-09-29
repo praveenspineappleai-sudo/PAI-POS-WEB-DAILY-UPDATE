@@ -26,7 +26,7 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
   const [copied, setCopied] = useState(false);// State to show "Password copied!" message
 
   if (!isOpen) return null;
-  
+
   // Function to generate a random password
   const generatePassword = () => {
     const length = 12;
@@ -46,7 +46,7 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
       password: suggestedPassword,
       confirmPassword: suggestedPassword
     });
-    
+
     // Clear password errors when suggesting a password
     if (errors.password || errors.confirmPassword) {
       setErrors({
@@ -60,7 +60,7 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
   const handleCopyPassword = () => {
     navigator.clipboard.writeText(formData.password);
     setCopied(true);
-    
+
     // Hide the confirmation message after 2 seconds
     setTimeout(() => {
       setCopied(false);
@@ -81,13 +81,18 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
       });
     }
   };
- 
+
   // Form validation function
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = "Name is required";
+
+    const cashierName = formData.name.trim();
+
+    if (!cashierName) {
+      newErrors.name = 'Name is required';
+    } else if (!/[A-Za-z]/.test(cashierName)) {
+      newErrors.name = 'Name must contain alphabetic characters.';
     }
 
     if (!formData.email.trim()) {
@@ -96,10 +101,14 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
       newErrors.email = "Email is invalid";
     }
 
+
     if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
+      newErrors.password = 'Password is required';
+    } else if (
+      !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/.test(formData.password)
+    ) {
+      newErrors.password =
+        'Password must be 8+ characters with uppercase, lowercase, number and special character.';
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -127,10 +136,10 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
       password: formData.password
     });
 
+
     if (result.success) {
       showToast("Success", "Cashier successfully added", "success");
 
-      // Reset form
       setFormData({
         name: "",
         email: "",
@@ -138,9 +147,24 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
         confirmPassword: ""
       });
       setErrors({});
+
+      if (onSubmit) {
+        onSubmit(result.data);
+      }
+
       onClose();
     } else {
-      showToast("Error", result.error || "Failed to add cashier", "error");
+      const errorMessage = result.error || "Failed to add cashier";
+
+      // Show email-related errors (e.g. duplicate email) below the email field
+      if (/email/i.test(errorMessage)) {
+        setErrors({
+          ...errors,
+          email: errorMessage
+        });
+      } else {
+        showToast("Error", errorMessage, "error");
+      }
     }
   };
 
@@ -177,8 +201,8 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
             </p>
           </div>
 
-          <form 
-            className="add-cashier-form" 
+          <form
+            className="add-cashier-form"
             onSubmit={handleSubmit}
             autoComplete="off"
             data-form-type="other"
@@ -195,7 +219,7 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
                 className="add-cashier-input"
                 autoComplete="off"
               />
-              {errors.name && <span style={{color: 'red', fontSize: '12px'}}>{errors.name}</span>}
+              {errors.name && <span style={{ color: 'red', fontSize: '12px' }}>{errors.name}</span>}
             </div>
 
             {/* Email Input */}
@@ -211,7 +235,7 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
                 autoComplete="off"
                 data-lpignore="true"
               />
-              {errors.email && <span style={{color: 'red', fontSize: '12px'}}>{errors.email}</span>}
+              {errors.email && <span style={{ color: 'red', fontSize: '12px' }}>{errors.email}</span>}
             </div>
 
             {/* Password Input */}
@@ -228,19 +252,19 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
                   autoComplete="new-password"
                   data-lpignore="true"
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="password-toggle-btn"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   <img src={eyeIcon} alt="Toggle visibility" className="password-toggle-icon" />
                 </button>
               </div>
-              {errors.password && <span style={{color: 'red', fontSize: '12px'}}>{errors.password}</span>}
-              
+              {errors.password && <span style={{ color: 'red', fontSize: '12px' }}>{errors.password}</span>}
+
               <div className="add-cashier-password-actions">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="add-cashier-suggest-btn"
                   onClick={handleSuggestPassword}
                 >
@@ -248,8 +272,8 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
                   Suggest password
                 </button>
                 <div className="copy-password-container">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="add-cashier-copy-btn"
                     onClick={handleCopyPassword}
                     disabled={!formData.password}
@@ -280,15 +304,15 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
                   autoComplete="new-password"
                   data-lpignore="true"
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="password-toggle-btn"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   <img src={eyeIcon} alt="Toggle visibility" className="password-toggle-icon" />
                 </button>
               </div>
-              {errors.confirmPassword && <span style={{color: 'red', fontSize: '12px'}}>{errors.confirmPassword}</span>}
+              {errors.confirmPassword && <span style={{ color: 'red', fontSize: '12px' }}>{errors.confirmPassword}</span>}
             </div>
           </form>
         </div>

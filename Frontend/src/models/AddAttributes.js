@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ProcessOrderButton from '../components/buttons/ProceedOrderButton';
 import AddButton from '../components/buttons/AddButton';
 import DeleteButton from '../components/buttons/DeleteButton';
+import { hasSpecialCharacters, stripSpecialCharacters, SPECIAL_CHARS_MESSAGE } from '../pages/ProductManagement/categoryAttributeUtils';
 import '../styles/addattributes.css';
 
 const AddAttributes = ({ 
@@ -41,9 +42,9 @@ const AddAttributes = ({
     }, [isOpen, initialAttributes]);
     // Handle label name change
     const handleLabelNameChange = (id, value) => {
-        setValidationMessage('');
-        setAttributes(prev => prev.map(attr => 
-            attr.id === id ? { ...attr, labelName: value } : attr
+        setValidationMessage(hasSpecialCharacters(value) ? SPECIAL_CHARS_MESSAGE : '');
+        setAttributes(prev => prev.map(attr =>
+            attr.id === id ? { ...attr, labelName: stripSpecialCharacters(value) } : attr
         ));
     };
     // Add new attribute

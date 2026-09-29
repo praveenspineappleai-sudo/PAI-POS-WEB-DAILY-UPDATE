@@ -12,7 +12,7 @@ import AddAttributes from '../../models/AddAttributes';
 import NewBarcode from '../../models/NewBarcode';
 import AddBarcode from '../../models/AddBarcode';
 import { fetchCategories, createCategory, getCategoryName, createAttributesBulk, getCategoryAttributes, getAttributeValues, addAttributeValue } from '../../integration/CategoryAPI';
-import { normalizeCategoryAttributeDefinitions } from './categoryAttributeUtils';
+import { normalizeCategoryAttributeDefinitions, hasSpecialCharacters, stripSpecialCharacters, SPECIAL_CHARS_MESSAGE } from './categoryAttributeUtils';
 import { fetchColors, createColor, getColorName } from '../../integration/ColorsAPI';
 import { fetchSizes, createSize, getSizeName } from '../../integration/SizeAPI';
 import {
@@ -62,6 +62,14 @@ const validateProductName = (name) => {
     }
 
     return { isValid: true, message: '' };
+};
+
+// Validation function for quantity (positive whole numbers, 1 and above)
+const getQuantityError = (quantity) => {
+    const value = String(quantity ?? '').trim();
+    if (value === '') return '* Quantity cannot be empty';
+    if (!/^[1-9]\d*$/.test(value)) return '* Quantity must be a whole number of 1 or more';
+    return '';
 };
 
 // Get icon for custom attribute
@@ -396,11 +404,22 @@ const AddProduct = () => {
 
     // Handler to save a new value for a custom attribute
     const handleSaveAttributeValue = async () => {
+
         const { attribute, inputVal } = addValueModal;
-        if (!inputVal.trim()) return;
+        const value = inputVal.trim();
+
         setAddValueModal(prev => ({ ...prev, saving: true }));
 
         const fieldName = (attribute.labelName || '').toLowerCase().replace(/\s+/g, '_');
+
+        const duplicate = (attributeOptions[fieldName] || []).some(
+            v => String(v).trim().toLowerCase() === inputVal.trim().toLowerCase()
+        );
+        if (duplicate) {
+            showToast('Warning', `${attribute.labelName} "${inputVal.trim()}" already exists. Please select it from the list.`, 'warning');
+            setAddValueModal({ open: false, attribute: null, inputVal: '', saving: false });
+            return;
+        }
 
         try {
             const categoryLower = basicDetails.category?.toLowerCase();
@@ -421,13 +440,7 @@ const AddProduct = () => {
             setCustomAttributeValues(prev => ({ ...prev, [fieldName]: newVal }));
             showToast('Success', `"${newVal}" added to ${attribute.labelName}!`, 'success');
         } catch (err) {
-            const newVal = inputVal.trim();
-            setAttributeOptions(prev => ({
-                ...prev,
-                [fieldName]: [...(prev[fieldName] || []), newVal]
-            }));
-            setCustomAttributeValues(prev => ({ ...prev, [fieldName]: newVal }));
-            showToast('Warning', `"${newVal}" added locally.`, 'warning');
+            showToast('Error', err.message || `Failed to add "${inputVal.trim()}" to ${attribute.labelName}.`, 'error');
         } finally {
             setAddValueModal({ open: false, attribute: null, inputVal: '', saving: false });
         }
@@ -504,6 +517,18 @@ const AddProduct = () => {
     const handleAttributesChange = (field, value) => {
         const isCustomAttribute = !['quantity', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(field);
 
+        if (field === 'quantity') {
+            // Only positive whole numbers (1 and above): drop everything except digits and leading zeros
+            const cleaned = value.replace(/\D/g, '').replace(/^0+/, '');
+
+            setAttributeValidationErrors(prev => ({
+                ...prev,
+                quantity: cleaned === '' ? '* Quantity cannot be empty' : ''
+            }));
+            setProductAttributes(prev => ({ ...prev, quantity: cleaned }));
+            return;
+        }
+
         if (value.trim() !== '') {
             setAttributeValidationErrors(prev => ({ ...prev, [field]: '' }));
         }
@@ -511,7 +536,7 @@ const AddProduct = () => {
         if (isCustomAttribute) {
             setCustomAttributeValues(prev => ({
                 ...prev,
-                [field]: value
+                [field]: stripSpecialCharacters(value)
             }));
         } else {
             setProductAttributes(prev => ({ ...prev, [field]: value }));
@@ -580,9 +605,16 @@ const AddProduct = () => {
                 .filter(attr => attr.alwaysShow && !(productAttributes[attr.fieldName] || customAttributeValues[attr.fieldName] || '').trim())
                 .reduce((errors, attr) => ({
                     ...errors,
-                    [attr.fieldName]: `* Please enter ${attr.labelName}`
+                    [attr.fieldName]: attr.fieldName === 'quantity'
+                        ? '* Quantity cannot be empty'
+                        : `* Please enter ${attr.labelName}`
                 }), {});
             setAttributeValidationErrors(missingAttributes);
+            return;
+        }
+        const quantityError = getQuantityError(productAttributes.quantity);
+        if (quantityError) {
+            setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
             return;
         }
 
@@ -631,6 +663,12 @@ const AddProduct = () => {
 
             if (validationErrors.length > 0) {
                 showToast('Validation Error', `Please fill in all required fields: ${validationErrors.join(', ')}`, 'warning');
+                return;
+            }
+
+            const quantityError = getQuantityError(productAttributes.quantity);
+            if (quantityError) {
+                setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
                 return;
             }
             setViewProductOpen(true);
@@ -845,6 +883,13 @@ const AddProduct = () => {
                 handleCloseNewProductModal();
             }
         } else {
+            if (newProductModalType === 'color' &&
+                colors.some(c => c.trim().toLowerCase() === capitalized.trim().toLowerCase())) {
+                showToast('Warning', `Color "${capitalized}" already exists. Please select it from the list.`, 'warning');
+                handleCloseNewProductModal();
+                return;
+            }
+
             try {
                 if (newProductModalType === 'color') {
                     await createColor(capitalized);
@@ -857,12 +902,9 @@ const AddProduct = () => {
                 }
             } catch (error) {
                 console.error(`Failed to create ${newProductModalType}:`, error);
-                showToast('Error', `Failed to create ${newProductModalType}. Please try again.`, 'error');
+                showToast('Error', error.message || `Failed to create ${newProductModalType}. Please try again.`, 'error');
 
-                if (newProductModalType === 'color') {
-                    setColors(prev => [...prev, capitalized]);
-                    handleAttributesChange('color', capitalized);
-                } else if (newProductModalType === 'size') {
+                if (newProductModalType === 'size') {
                     setSizes(prev => [...prev, capitalized]);
                     handleAttributesChange('size', capitalized);
                 }
@@ -960,10 +1002,19 @@ const AddProduct = () => {
                 </div>
             );
         } else if (attribute.isCustom) {
-            const options = attributeOptions[fieldName] || [];
-            const loading = attributeOptionsLoading[fieldName] || false;
-            const selectedVal = customAttributeValues[fieldName] || '';
+            // A custom attribute named Color/Size is backed by the shared colours/sizes lists
+            // (the product save resolves color_id / size_id from them), so use those here.
+            const usesGlobalList = fieldName === 'color' || fieldName === 'size';
+            const loading = usesGlobalList
+                ? (fieldName === 'color' ? loadingColors : loadingSizes)
+                : (attributeOptionsLoading[fieldName] || false);
+            const selectedVal = usesGlobalList
+                ? (productAttributes[fieldName] || '')
+                : (customAttributeValues[fieldName] || '');
             const placeholder = loading ? "Loading..." : `Select ${labelName.toLowerCase()}`;
+            const handleAddClick = () => usesGlobalList
+                ? handleOpenNewProductModal(fieldName)
+                : handleOpenAddValueModal(attribute);
 
             return (
                 <div className={`form-group ${fieldName}-field`}>
@@ -982,7 +1033,7 @@ const AddProduct = () => {
                             <img src={dropdownIcon} alt="Dropdown" className="dropdown-icon custom-attr-dropdown-icon" />
                         </div>
                         <AddButton
-                            onClick={() => handleOpenAddValueModal(attribute)}
+                            onClick={handleAddClick}
                             title={`Add new ${labelName}`}
                             className="custom-attr-add-btn"
                         />
@@ -1001,7 +1052,8 @@ const AddProduct = () => {
                 <div className={`form-group ${fieldName}-field`}>
                     <label>{labelName}</label>
                     <input
-                        type={type === 'number' ? 'number' : 'text'}
+                        type={type === 'number' && fieldName !== 'quantity' ? 'number' : 'text'}
+                        inputMode={fieldName === 'quantity' ? 'numeric' : undefined}
                         placeholder={placeholder}
                         value={value}
                         onChange={onChange}
@@ -1093,43 +1145,64 @@ const AddProduct = () => {
         const categoryLower = basicDetails.category.toLowerCase();
         const currentAttrs = categoryCustomAttributes[categoryLower] || [];
 
-        const updatedAttrs = [...currentAttrs, ...newAttributes];
+        // Skip labels that are already in the list (case-insensitive)
+        const knownLabels = new Set(currentAttrs.map(a => (a.labelName || '').toLowerCase()));
+        const attrsToAdd = newAttributes.filter(attr => {
+            const key = (attr.labelName || '').trim().toLowerCase();
+            if (!key || knownLabels.has(key)) return false;
+            knownLabels.add(key);
+            return true;
+        });
 
+        if (attrsToAdd.length === 0) {
+            showToast('Warning', 'These attributes already exist for this category.', 'warning');
+            setAddAttributesOpen(false);
+            return;
+        }
+
+        // Show the new attributes in the list immediately
         setCategoryCustomAttributes(prev => ({
             ...prev,
-            [categoryLower]: updatedAttrs
+            [categoryLower]: [...(prev[categoryLower] || []), ...attrsToAdd]
         }));
 
         try {
-            const categoryId = window._newCategoryId;
+            const catObj = categoriesRaw.find(c =>
+                (c.name || c.category_name || '').toLowerCase() === categoryLower
+            );
+            const categoryId = catObj?.id || window._newCategoryId;
+
             if (categoryId) {
-                const attributesForDb = newAttributes.map(attr => ({
-                    attribute_name: attr.labelName,
+                const attributesForDb = attrsToAdd.map(attr => ({
+                    attribute_name: attr.labelName.trim(),
                     attribute_type: attr.type || 'text',
                     is_required: true
                 }));
 
-                const savedAttrs = await createAttributesBulk(categoryId, attributesForDb);
-                showToast('Success', `${newAttributes.length} custom attribute(s) saved to database!`, 'success');
+                await createAttributesBulk(categoryId, attributesForDb);
+                showToast('Success', `${attrsToAdd.length} custom attribute(s) saved to database!`, 'success');
 
-                if (savedAttrs && savedAttrs.length > 0) {
-                    const attrsWithIds = updatedAttrs.map(attr => {
-                        const dbAttr = savedAttrs.find(
-                            sa => sa.attribute_name?.toLowerCase() === attr.labelName?.toLowerCase()
-                        );
-                        return dbAttr ? { ...attr, id: dbAttr.id } : attr;
+                // Re-sync with the server so the list carries the real attribute ids
+                const serverAttrs = normalizeCategoryAttributeDefinitions(await getCategoryAttributes(categoryId));
+                if (serverAttrs.length > 0) {
+                    setCategoryCustomAttributes(prev => {
+                        const merged = [...(prev[categoryLower] || [])];
+                        serverAttrs.forEach(attr => {
+                            const idx = merged.findIndex(existing =>
+                                (existing.labelName || '').toLowerCase() === (attr.labelName || '').toLowerCase()
+                            );
+                            if (idx >= 0) merged[idx] = { ...merged[idx], ...attr };
+                            else merged.push(attr);
+                        });
+                        return { ...prev, [categoryLower]: merged };
                     });
-                    setCategoryCustomAttributes(prev => ({
-                        ...prev,
-                        [categoryLower]: attrsWithIds
-                    }));
                 }
             } else {
-                showToast('Success', `${newAttributes.length} custom attribute(s) added locally!`, 'success');
+                showToast('Success', `${attrsToAdd.length} custom attribute(s) added locally!`, 'success');
             }
         } catch (error) {
             console.error('Failed to save attributes to database:', error);
-            showToast('Warning', 'Attributes saved locally but failed to save to database.', 'warning');
+            showToast('Warning', error.message || 'Attributes saved locally but failed to save to database.', 'warning');
         }
 
         setAddAttributesOpen(false);
@@ -1429,7 +1502,7 @@ const AddProduct = () => {
                                     placeholder={`Type your ${addValueModal.attribute?.labelName?.toLowerCase()}`}
                                     value={addValueModal.inputVal}
                                     autoFocus
-                                    onChange={e => setAddValueModal(prev => ({ ...prev, inputVal: e.target.value }))}
+                                    onChange={e => setAddValueModal(prev => ({ ...prev, inputVal: stripSpecialCharacters(e.target.value) }))}
                                     onKeyDown={e => { if (e.key === 'Enter') handleSaveAttributeValue(); }}
                                     disabled={addValueModal.saving}
                                 />

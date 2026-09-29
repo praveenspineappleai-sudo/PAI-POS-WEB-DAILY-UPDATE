@@ -1,6 +1,6 @@
 .stats-cards-container-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 60px;
   margin: 12px 0;
   padding: 14px;
@@ -68,7 +68,7 @@
 /* 1440px - Large Desktop */
 @media screen and (max-width: 1440px) {
   .stats-cards-container-2 {
-    gap: 30px;
+    gap: 24px;
     padding: 15px;
   }
   
@@ -88,12 +88,12 @@
 /* 1024px - Tablet Landscape */
 @media screen and (max-width: 1024px) {
   .stats-cards-container-2 {
-    gap: 20px;
-    padding: 20px;
+    gap: 14px;
+    padding: 14px;
   }
   
   .stats-card-2 {
-    padding: 18px;
+    padding: 14px;
     border-radius: 10px;
   }
   

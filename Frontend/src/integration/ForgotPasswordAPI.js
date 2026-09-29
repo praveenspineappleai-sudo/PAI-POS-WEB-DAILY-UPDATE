@@ -3,8 +3,49 @@ import Cookies from 'js-cookie';
 
 import { API_BASE_URL as BASE_URL } from '../config/apiConfig';
 
-const API_BASE_URL = `${BASE_URL}/api`;
+const API_BASE_URL = `${BASE_URL}/api/auth`;
 
+
+/**
+ * Check whether an email is registered before starting the forgot password flow
+ * @param {string} email - User email
+ * @returns {Promise<Object>} Response with registered status and message
+ */
+export const checkEmailRegistered = async (email) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/check-email-registered`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        registered: false,
+        error: data.message || 'Unregistered Email, Cannot Proceed'
+      };
+    }
+
+    return {
+      success: true,
+      registered: true,
+      message: data.message || 'Email is registered'
+    };
+
+  } catch (error) {
+    console.error('Check email registered error:', error);
+    return {
+      success: false,
+      registered: false,
+      error: 'Failed to verify email. Please try again.'
+    };
+  }
+};
 
 /**
  * Send OTP for password reset

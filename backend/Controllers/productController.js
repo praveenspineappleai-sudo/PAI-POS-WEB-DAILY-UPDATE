@@ -1090,21 +1090,23 @@ const addPricing = async (req, res) => {
       const { color_id, size_id, quantity, cost_price, selling_price } =
         variant;
 
-      const parsedQuantity = Number(quantity);
-      const parsedCostPrice = Number(cost_price);
-      const parsedSellingPrice = Number(selling_price);
 
-      // Validate required fields
-      if (
-        !Number.isFinite(parsedQuantity) ||
-        !Number.isFinite(parsedCostPrice) ||
-        !Number.isFinite(parsedSellingPrice)
-      ) {
-        return res.status(400).json({
-          error:
-            "Quantity, cost price, and selling price are required for each variation",
-        });
-      }
+const parsedQuantity = Number(quantity);
+const parsedCostPrice = Number(cost_price);
+const parsedSellingPrice = Number(selling_price);
+
+if (
+  !Number.isInteger(parsedQuantity) ||
+  parsedQuantity < 0 ||
+  !Number.isFinite(parsedCostPrice) ||
+  parsedCostPrice < 0 ||
+  !Number.isFinite(parsedSellingPrice) ||
+  parsedSellingPrice < 0
+) {
+  return res.status(400).json({
+    error: 'Quantity must be a whole number >= 0 and prices must be >= 0.'
+  });
+}
 
       console.log("Processing variant:", {
         color_id,

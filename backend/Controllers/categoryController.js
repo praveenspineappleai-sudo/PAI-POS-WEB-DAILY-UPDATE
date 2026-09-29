@@ -32,10 +32,20 @@ exports.getCategoryById = async (req, res) => {
 // POST create a new category
 exports.createCategory = async (req, res) => {
   try {
-    let { category_name } = req.body;
-    if (!category_name || !category_name.trim()) {
-      return res.status(400).json({ message: "Category name is required" });
-    }
+
+let { category_name } = req.body;
+
+if (!category_name || !String(category_name).trim()) {
+  return res.status(400).json({ message: "Category name is required" });
+}
+
+category_name = String(category_name).trim();
+
+if (/[^\p{L}\p{N} ]/u.test(category_name)) {
+  return res.status(400).json({
+    message: "Category name may only contain letters, numbers and spaces"
+  });
+}
 
     category_name = category_name.trim();
 

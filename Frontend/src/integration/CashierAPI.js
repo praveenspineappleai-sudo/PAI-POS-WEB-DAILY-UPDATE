@@ -62,7 +62,6 @@ export const addCashier = async (cashierData) => {
     return { success: true, data };
   } catch (error) {
     console.error("❌ Add cashier error:", error);
-    alert("Error adding cashier: " + error.message);
     return { success: false, error: error.message };
   }
 };

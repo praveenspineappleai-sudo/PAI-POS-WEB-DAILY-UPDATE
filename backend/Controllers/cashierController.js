@@ -1,4 +1,4 @@
-const { sequelize, User, CashierDetail, OwnerDetail, BusinessDetail  } = require('../models');
+const { sequelize, User, CashierDetail, OwnerDetail, BusinessDetail } = require('../models');
 const bcrypt = require('bcrypt');
 
 exports.createCashier = async (req, res) => {
@@ -6,9 +6,20 @@ exports.createCashier = async (req, res) => {
   try {
     const { fullname, email, password, business_id } = req.body;
 
-    // 🧩 Validate inputs
-    if (!fullname || !email || !password || !business_id) {
-      return res.status(400).json({ message: 'All fields are required.' });
+    // Validate cashier name
+    const cashierName = String(fullname ?? '').trim();
+
+    if (!cashierName || !/[A-Za-z]/.test(cashierName)) {
+      return res.status(400).json({
+        message: 'Name must contain valid alphabetic characters.'
+      });
+    }
+
+    // Validate required fields
+    if (!email || !password || !business_id) {
+      return res.status(400).json({
+        message: 'All fields are required.'
+      });
     }
 
     // 🧩 Find business to get owner_id
@@ -31,8 +42,20 @@ exports.createCashier = async (req, res) => {
       return res.status(400).json({ message: 'Email already exists.' });
     }
 
-    // 🧩 Hash password
+    const strongPassword =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+
+    if (!strongPassword.test(password)) {
+      await t.rollback();
+
+      return res.status(400).json({
+        message:
+          'Password must be 8+ characters with uppercase, lowercase, number and special character.'
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
+
 
     // 🧩 Create new user
     const user = await User.create(
@@ -49,7 +72,7 @@ exports.createCashier = async (req, res) => {
     // 🧩 Create cashier detail linked to owner
     const cashier = await CashierDetail.create(
       {
-        fullname,
+        fullname: cashierName,
         user_id: user.id,
         owner_id,
       },
@@ -171,17 +194,17 @@ exports.deleteCashier = async (req, res) => {
 
     await t.commit();
 
-    res.json({ 
+    res.json({
       success: true,
-      message: 'Cashier deleted successfully' 
+      message: 'Cashier deleted successfully'
     });
   } catch (error) {
     await t.rollback();
     console.error('Error deleting cashier:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Failed to delete cashier',
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -215,10 +238,10 @@ exports.getBusinessDetails = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching business details:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Failed to fetch business details',
-      error: error.message 
+      error: error.message
     });
   }
 };

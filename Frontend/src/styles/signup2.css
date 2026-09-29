@@ -25,6 +25,7 @@
 
 .form-card2 {
   width: 640px;
+  max-width: 100%;
   background: #FFFFFF;
   border-radius: 12px;
   padding: 24px;

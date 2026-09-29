@@ -1,14 +1,16 @@
 /* productmanagement.css */
 .product-management-page {
-  min-height: 100vh;
+  height: 100vh;
   background-color: #f8fafc;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .content-wrapper {
-  margin-left: 245px;
+  margin-left: 260px;
   padding: 65px 25px 0px 25px;
-  min-height: 100vh;
+  min-height: 100%;
   transition: margin-left 0.3s ease, padding 0.3s ease;
   box-sizing: border-box;
 }
@@ -56,17 +58,22 @@
 }
 
 .search-section {
-  flex: 1;
-  min-width: 400px;
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .search-section input {
   width: 100%;
-  min-width: 700px;
+  min-width: 0;
 }
 
 .search-input-container {
   width: 100%;
+  max-width: none;
+}
+
+.product-list-header button {
+  flex-shrink: 0;
 }
 
 .product-table-container {
@@ -356,10 +363,6 @@
     padding: 70px 20px 0px 20px;
   }
 
-  .search-section input {
-    min-width: 600px;
-  }
-
   .product-list-header button {
     min-width: 200px;
     font-size: 15px;
@@ -404,7 +407,7 @@
 /* 1024px - Tablet Landscape */
 @media screen and (max-width: 1024px) {
   .content-wrapper {
-    margin-left: 250px;
+    margin-left: 260px;
     padding: 70px 20px 0px 20px;
     overflow-x: auto;
   }
@@ -524,7 +527,7 @@
 /* 900px - Tablet */
 @media screen and (max-width: 900px) {
   .content-wrapper {
-    margin-left: 230px;
+    margin-left: 240px;
     padding: 80px 20px 0px 20px;
     overflow-x: auto;
   }
@@ -987,4 +990,46 @@
     padding: 1px 3px;
     border-radius: 6px;
   }
+}
+/* Fill the full viewport height: list card stretches, pagination stays at the bottom */
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 15px;
+}
+
+.content-wrapper > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.content-wrapper > .product-list-section {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-wrapper > .product-list-section .product-table-container {
+  flex: 1 1 auto;
+}
+
+.product-table td:nth-child(4),
+.product-table td:nth-child(5),
+.product-table td:nth-child(6) {
+  white-space: nowrap;
+}
+
+/* Stretch the product rows to fill the card height */
+.content-wrapper > .product-list-section .product-table-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.content-wrapper > .product-list-section .product-table {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.content-wrapper > .product-list-section .product-table thead tr {
+  height: 1px;
 }
