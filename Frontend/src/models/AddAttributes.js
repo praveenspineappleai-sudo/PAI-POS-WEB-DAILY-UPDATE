@@ -18,6 +18,7 @@ const AddAttributes = ({
     ]);
     const [hasSavedAttributes, setHasSavedAttributes] = useState(false);
     const [validationMessage, setValidationMessage] = useState('');
+    const [validationErrors, setValidationErrors] = useState({});
 
     // Reset attributes when modal opens/closes
     useEffect(() => {
@@ -26,6 +27,7 @@ const AddAttributes = ({
             setAttributes([{ id: Date.now(), labelName: '' }]);
             setHasSavedAttributes(false);
             setValidationMessage('');
+            setValidationErrors({});
         }
     }, [isOpen]); // This effect runs every time isOpen changes
 
@@ -41,7 +43,7 @@ const AddAttributes = ({
     }, [isOpen, initialAttributes]);
     // Handle label name change
     const handleLabelNameChange = (id, value) => {
-        setValidationMessage('');
+        setValidationErrors(prev => ({ ...prev, [id]: '' }));
         setAttributes(prev => prev.map(attr => 
             attr.id === id ? { ...attr, labelName: value } : attr
         ));
@@ -58,17 +60,53 @@ const AddAttributes = ({
     const removeAttribute = (id) => {
         if (attributes.length > 1) {
             setAttributes(prev => prev.filter(attr => attr.id !== id));
+            setValidationErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[id];
+                return newErrors;
+            });
         }
     };
     // Handle save action
     const handleSave = () => {
-        // Filter out empty attributes
-        const validAttributes = attributes.filter(attr => attr.labelName.trim() !== '');
+        const newErrors = {};
         
-        if (validAttributes.length === 0) {
-            setValidationMessage('Please add at least one attribute with a valid name');
+        const seen = new Set();
+        
+        attributes.forEach((attr) => {
+            const val = attr.labelName.trim();
+            const normalized = val.toLowerCase();
+            
+            // DEF_010: Empty value
+            if (val === '') {
+                newErrors[attr.id] = 'Please enter a value for this option.';
+            } 
+            // DEF_011: Maximum length
+            else if (val.length > 255) {
+                newErrors[attr.id] = 'Label name must be 255 characters or fewer.';
+            }
+            // DEF_012: Special characters only
+            else if (!/[A-Za-z0-9]/.test(val)) {
+                newErrors[attr.id] = 'Attribute name cannot contain only special characters.';
+            }
+            // DEF_009: Duplicate values
+            else if (seen.has(normalized)) {
+                newErrors[attr.id] = 'This attribute value already exists.';
+            } else {
+                seen.add(normalized);
+            }
+        });
+        
+        if (Object.keys(newErrors).length > 0) {
+            setValidationErrors(newErrors);
             return;
         }
+        
+        // All attributes are valid, ensure they are trimmed
+        const validAttributes = attributes.map(attr => ({
+            ...attr,
+            labelName: attr.labelName.trim()
+        }));
         
         const saveHandler = onSaveAttributes || onSave;
         if (saveHandler) {
@@ -131,6 +169,11 @@ const AddAttributes = ({
                                     <DeleteButton onClick={() => removeAttribute(attribute.id)} />
                                 )}
                             </div>
+                            {validationErrors[attribute.id] && (
+                                <span className="validation-error" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                                    {validationErrors[attribute.id]}
+                                </span>
+                            )}
                             {validationMessage && index === 0 && (
                                 <div className="attribute-validation-message" role="alert">
                                     {validationMessage}

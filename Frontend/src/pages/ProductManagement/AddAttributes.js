@@ -99,15 +99,19 @@ const AddAttributes = ({ isOpen, onClose, onSave, categoryName }) => {
 
     // Add value to custom attribute
     const handleAddValue = (id) => {
-        if (newValue.trim() === '') return;
+        const value = newValue.trim();
+        if (value === '') return;
         
         setAttributes(attributes.map(attr => {
             if (attr.id === id) {
-                if (attr.values.includes(newValue.trim())) {
-                    alert('This value already exists!');
+                const isDuplicate = attr.values.some(
+                    existingValue => existingValue.trim().toLowerCase() === value.toLowerCase()
+                );
+                if (isDuplicate) {
+                    alert('This attribute value already exists.');
                     return attr;
                 }
-                return { ...attr, values: [...attr.values, newValue.trim()] };
+                return { ...attr, values: [...attr.values, value] };
             }
             return attr;
         }));
