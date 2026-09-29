@@ -42,7 +42,71 @@
 .header-right {
     display: flex;
     align-items: center;
+    gap: 16px;
     height: 100%;
+}
+
+.header-shift-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #64748B;
+    background: #F8FAFC;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid #E2E8F0;
+}
+
+.header-shift-info strong {
+    color: #1E293B;
+    font-weight: 600;
+}
+
+.shift-divider {
+    color: #CBD5E1;
+}
+
+.shift-status-open {
+    color: #16A34A;
+    font-weight: 600;
+}
+
+.header-notification-btn {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 50%;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.header-notification-btn:hover {
+    background: #F1F5F9;
+    color: #0F172A;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #EF4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #FFFFFF;
 }
 
 .admin-user {
@@ -89,6 +153,60 @@
     border-right: 1px solid #E0E0E0;
     z-index: 100;
     transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-support-card {
+    margin: auto 15px 20px;
+    padding: 14px 16px;
+    background: #EBF7EF;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar-support-card:hover {
+    background: #DCF2E3;
+    transform: translateY(-1px);
+}
+
+.support-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(47, 122, 63, 0.12);
+}
+
+.support-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.support-text span {
+    font-size: 11px;
+    color: #64748B;
+    font-weight: 500;
+}
+
+.support-text strong {
+    font-size: 13px;
+    color: #0F172A;
+    font-weight: 700;
+}
+
+.support-arrow {
+    font-size: 18px;
+    color: #2F7A3F;
+    font-weight: 700;
 }
 
 .sidebar-header {
