@@ -64,11 +64,13 @@ const validateProductName = (name) => {
     return { isValid: true, message: '' };
 };
 
-// Validation function for quantity (positive whole numbers, 1 and above)
+// Validation function for quantity (numbers, decimals allowed, 1 and above)
 const getQuantityError = (quantity) => {
     const value = String(quantity ?? '').trim();
     if (value === '') return '* Quantity cannot be empty';
-    if (!/^[1-9]\d*$/.test(value)) return '* Quantity must be a whole number of 1 or more';
+    if (!/^\d+(\.\d+)?$/.test(value)) return '* Quantity must be a number of 1 or more';
+    const numeric = parseFloat(value);
+    if (!Number.isFinite(numeric) || numeric < 1) return '* Quantity must be a number of 1 or more';
     return '';
 };
 
@@ -518,12 +520,19 @@ const AddProduct = () => {
         const isCustomAttribute = !['quantity', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(field);
 
         if (field === 'quantity') {
-            // Only positive whole numbers (1 and above): drop everything except digits and leading zeros
-            const cleaned = value.replace(/\D/g, '').replace(/^0+/, '');
+            // Numbers of 1 and above, decimals allowed: drop everything except digits and a single decimal point
+            let cleaned = value.replace(/[^\d.]/g, '');
+            const firstDot = cleaned.indexOf('.');
+            if (firstDot !== -1) {
+                // Keep only the first decimal point; strip any extra ones
+                cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+            }
+            // Collapse leading zeros (e.g. "007" -> "7") but keep a leading "0." as typed (e.g. "0.5")
+            cleaned = cleaned.replace(/^0+(?=\d)/, '');
 
             setAttributeValidationErrors(prev => ({
                 ...prev,
-                quantity: cleaned === '' ? '* Quantity cannot be empty' : ''
+                quantity: getQuantityError(cleaned)
             }));
             setProductAttributes(prev => ({ ...prev, quantity: cleaned }));
             return;
@@ -551,8 +560,8 @@ const AddProduct = () => {
             const newProduct = {
                 ...pendingProduct,
                 barcode: generatedBarcode,
-                status: parseInt(pendingProduct.quantity) === 0 ? 'Out of stock' :
-                    parseInt(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
+                status: parseFloat(pendingProduct.quantity) === 0 ? 'Out of stock' :
+                    parseFloat(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
             };
 
             setAddedProducts(prev => [...prev, newProduct]);
@@ -570,8 +579,8 @@ const AddProduct = () => {
             const newProduct = {
                 ...pendingProduct,
                 barcode: barcodeValue.trim(),
-                status: parseInt(pendingProduct.quantity) === 0 ? 'Out of stock' :
-                    parseInt(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
+                status: parseFloat(pendingProduct.quantity) === 0 ? 'Out of stock' :
+                    parseFloat(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
             };
 
             setAddedProducts(prev => [...prev, newProduct]);
@@ -1053,7 +1062,7 @@ const AddProduct = () => {
                     <label>{labelName}</label>
                     <input
                         type={type === 'number' && fieldName !== 'quantity' ? 'number' : 'text'}
-                        inputMode={fieldName === 'quantity' ? 'numeric' : undefined}
+                        inputMode={fieldName === 'quantity' ? 'decimal' : undefined}
                         placeholder={placeholder}
                         value={value}
                         onChange={onChange}
