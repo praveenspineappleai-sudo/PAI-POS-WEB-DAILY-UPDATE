@@ -702,6 +702,16 @@ const createProduct = async (req, res) => {
   const { name, description, categorys_id } = req.body;
 
   try {
+    const productName = String(name || '').trim();
+    const MAX_PRODUCT_NAME_LENGTH = 255;
+    
+    if (productName.length > MAX_PRODUCT_NAME_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Product name cannot exceed ${MAX_PRODUCT_NAME_LENGTH} characters.`
+      });
+    }
+
     // Validate category existence
     const category = await Category.findByPk(categorys_id);
     if (!category) {
@@ -792,6 +802,14 @@ const updateProduct = async (req, res) => {
            prefixedName = `${prefix}.${name}`;
        }
    }
+
+    const MAX_PRODUCT_NAME_LENGTH = 255;
+    if (String(prefixedName).trim().length > MAX_PRODUCT_NAME_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Product name cannot exceed ${MAX_PRODUCT_NAME_LENGTH} characters.`
+      });
+    }
 
     // Update with explicit timestamp
     await product.update({
@@ -1087,7 +1105,7 @@ const addPricing = async (req, res) => {
     });
 
     for (const variant of variations) {
-      const { color_id, size_id, quantity, cost_price, selling_price } =
+      const { color_id, size_id, quantity, unit, cost_price, selling_price } =
         variant;
 
 
@@ -1108,10 +1126,33 @@ if (
   });
 }
 
+      if (!Number.isFinite(parsedCostPrice) || parsedCostPrice < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cost price must be a non-negative number.'
+        });
+      }
+
+      if (!Number.isFinite(parsedSellingPrice) || parsedSellingPrice < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selling price must be a non-negative number.'
+        });
+      }
+
+      if (parsedQuantity < 0) {
+        return res.status(400).json({ error: "Quantity cannot be negative." });
+      }
+
+      if (!decimalUnits.includes(unit || 'pcs') && !Number.isInteger(parsedQuantity)) {
+        return res.status(400).json({ error: "Please enter a whole number for this unit." });
+      }
+
       console.log("Processing variant:", {
         color_id,
         size_id,
         quantity: parsedQuantity,
+        unit: unit || 'pcs',
         cost_price: parsedCostPrice,
         selling_price: parsedSellingPrice,
       });
@@ -1120,12 +1161,24 @@ if (
       let barcode_no;
       
       if (variant.barcode) {
-        barcode_no = variant.barcode;
+        // DEF_021, DEF_023: Normalize and validate custom barcodes
+        const normalizedBarcode = String(variant.barcode || '').trim();
+        const BARCODE_PATTERN = /^[A-Za-z0-9]+$/;
+        
+        if (!BARCODE_PATTERN.test(normalizedBarcode)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Barcode can contain only letters and numbers.'
+          });
+        }
+        
+        barcode_no = normalizedBarcode;
         
         // Check if barcode already exists
         const existingBarcode = await Barcode.findOne({ where: { barcode_no } });
         if (existingBarcode) {
-          return res.status(400).json({ 
+          return res.status(409).json({ 
+            success: false,
             error: `Barcode '${barcode_no}' already exists. Please use a unique barcode.` 
           });
         }
@@ -1152,6 +1205,7 @@ if (
         cost_price: parsedCostPrice, // Match database column name
         selling_price: parsedSellingPrice, // Match database column name
         quantity: parsedQuantity,
+        unit: unit || 'pcs',
         barcode_id: barcode.id,
         product_id,
         color_id: color_id ?? null,
@@ -1194,6 +1248,15 @@ if (
       .json({ success: true, message: "All variations saved successfully!" });
   } catch (error) {
     console.error("Unexpected error:", error);
+    
+    // DEF_025: Catch database unique constraint violations
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        error: "Barcode already exists. Please use a unique barcode."
+      });
+    }
+
     res
       .status(500)
       .json({ error: "Internal server error", details: error.message });
@@ -1203,15 +1266,54 @@ if (
 const editPrice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { color_id, size_id, quantity, cost_price, selling_price } = req.body;
+    const { color_id, size_id, quantity, unit, cost_price, selling_price } = req.body;
 
     console.log("URL Params:", req.params);
     console.log("Incoming request data:", req.body);
+
+    if (quantity !== undefined) {
+      const parsedQuantity = Number(quantity);
+      if (parsedQuantity < 0) {
+        return res.status(400).json({ error: "Quantity cannot be negative." });
+      }
+      const decimalUnits = ['kg', 'g', 'L', 'ml'];
+      // if unit is in body use it, else if not we assume 'pcs' unless we fetch price first
+    }
+
+    if (cost_price !== undefined) {
+      const parsedCostPrice = Number(cost_price);
+      if (!Number.isFinite(parsedCostPrice) || parsedCostPrice < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cost price must be a non-negative number.'
+        });
+      }
+    }
+
+    if (selling_price !== undefined) {
+      const parsedSellingPrice = Number(selling_price);
+      if (!Number.isFinite(parsedSellingPrice) || parsedSellingPrice < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Selling price must be a non-negative number.'
+        });
+      }
+    }
+
 
     // Step 1: Find the price entry using the ID from the URL
     const price = await Price.findByPk(id);
     if (!price) {
       return res.status(404).json({ error: "Price entry not found" });
+    }
+
+    if (quantity !== undefined) {
+      const parsedQuantity = Number(quantity);
+      const currentUnit = unit !== undefined ? unit : price.unit;
+      const decimalUnits = ['kg', 'g', 'L', 'ml'];
+      if (!decimalUnits.includes(currentUnit) && !Number.isInteger(parsedQuantity)) {
+        return res.status(400).json({ error: "Please enter a whole number for this unit." });
+      }
     }
 
     console.log("Existing price entry before update:", price);
@@ -1226,6 +1328,7 @@ const editPrice = async (req, res) => {
       selling_price:
         selling_price !== undefined ? selling_price : price.selling_price, // Match database column
       quantity: quantity !== undefined ? quantity : price.quantity,
+      unit: unit !== undefined ? unit : price.unit,
       color_id: color_id !== undefined ? color_id : price.color_id,
       size_id: size_id !== undefined ? size_id : price.size_id,
       updated_at: new Date(), // Explicit timestamp update
@@ -1422,6 +1525,7 @@ const updateProductWithPrice = async (req, res) => {
       color_id,
       size_id,
       quantity,
+      unit,
       cost_price,
       selling_price,
       business_id,
@@ -1464,8 +1568,53 @@ const updateProductWithPrice = async (req, res) => {
       return res.status(404).json({ error: "Price record not found" });
     }
 
+    if (quantity !== undefined) {
+      const parsedQuantity = Number(quantity);
+      if (parsedQuantity < 0) {
+        await transaction.rollback();
+        return res.status(400).json({ error: "Quantity cannot be negative." });
+      }
+      const currentUnit = unit !== undefined ? unit : price.unit;
+      const decimalUnits = ['kg', 'g', 'L', 'ml'];
+      if (!decimalUnits.includes(currentUnit) && !Number.isInteger(parsedQuantity)) {
+        await transaction.rollback();
+        return res.status(400).json({ error: "Please enter a whole number for this unit." });
+      }
+    }
+
+    if (cost_price !== undefined) {
+      const parsedCostPrice = Number(cost_price);
+      if (!Number.isFinite(parsedCostPrice) || parsedCostPrice < 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'Cost price must be a non-negative number.'
+        });
+      }
+    }
+
+    if (selling_price !== undefined) {
+      const parsedSellingPrice = Number(selling_price);
+      if (!Number.isFinite(parsedSellingPrice) || parsedSellingPrice < 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'Selling price must be a non-negative number.'
+        });
+      }
+    }
+
     // ✅ Build new prefixed name
     const prefixedName = `${business.name}.${name}`;
+
+    const MAX_PRODUCT_NAME_LENGTH = 255;
+    if (String(prefixedName).trim().length > MAX_PRODUCT_NAME_LENGTH) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Product name cannot exceed ${MAX_PRODUCT_NAME_LENGTH} characters.`
+      });
+    }
 
     // ✅ Check for duplicate product name within same business
     const existingProduct = await Product.findOne({
@@ -1505,6 +1654,7 @@ const updateProductWithPrice = async (req, res) => {
         color_id: color_id !== undefined ? color_id : price.color_id,
         size_id: size_id !== undefined ? size_id : price.size_id,
         quantity: quantity !== undefined ? quantity : price.quantity,
+        unit: unit !== undefined ? unit : price.unit,
         cost_price: cost_price !== undefined ? cost_price : price.cost_price,
         selling_price:
           selling_price !== undefined ? selling_price : price.selling_price,

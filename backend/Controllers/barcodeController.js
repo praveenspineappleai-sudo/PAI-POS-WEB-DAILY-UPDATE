@@ -33,7 +33,8 @@ const generateBarcodeImage = async (barcode_no) => {
 // Create barcode
 const createBarcode = async (req, res) => {
   try {
-    const { barcode_no } = req.body; // Extract barcode number from request body
+    let { barcode_no } = req.body; // Extract barcode number from request body
+    barcode_no = String(barcode_no || '').trim(); // DEF_024: Normalize leading/trailing spaces
     if (!barcode_no)
       return res.status(400).json({ error: "Barcode number is required" }); // Validate input
 

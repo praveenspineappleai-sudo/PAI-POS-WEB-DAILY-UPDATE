@@ -45,6 +45,20 @@ router.post('/categories/:categoryId/attributes', authMiddleware, async (req, re
             return res.status(400).json({ success: false, message: SPECIAL_CHARS_MESSAGE });
         }
         
+        const trimmedName = attribute_name ? attribute_name.trim() : '';
+        if (!trimmedName) {
+            return res.status(400).json({
+                success: false,
+                message: 'Attribute name is required.'
+            });
+        }
+        if (!/[A-Za-z0-9]/.test(trimmedName)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Attribute name cannot contain only special characters.'
+            });
+        }
+        
         // Check if attribute already exists for this category
         const [existing] = await db.query(
             'SELECT id FROM attributes WHERE category_id = ? AND attribute_name = ?',
@@ -117,6 +131,15 @@ router.post('/categories/:categoryId/attributes/bulk', authMiddleware, async (re
         
         for (const attr of attributes) {
             const { attribute_name, attribute_type = 'text' } = attr;
+            
+            const trimmedName = attribute_name ? attribute_name.trim() : '';
+            if (!trimmedName || !/[A-Za-z0-9]/.test(trimmedName)) {
+                await connection.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: 'Attribute name cannot contain only special characters.'
+                });
+            }
             
             // Check if attribute already exists
             const [existing] = await connection.query(
@@ -284,8 +307,12 @@ router.post('/attributes/:attributeId/values', authMiddleware, async (req, res) 
         const { attributeId } = req.params;
         const { value } = req.body;
         
-        if (!value || value.trim() === '') {
-            return res.status(400).json({ success: false, message: 'Value is required' });
+        const trimmedValue = value ? value.trim() : '';
+        if (!trimmedValue) {
+            return res.status(400).json({
+                success: false,
+                message: 'Attribute value cannot be empty.'
+            });
         }
         if (hasSpecialCharacters(value)) {
             return res.status(400).json({ success: false, message: SPECIAL_CHARS_MESSAGE });
@@ -311,6 +338,18 @@ router.post('/attributes/:attributeId/values', authMiddleware, async (req, res) 
                 value VARCHAR(255) NOT NULL UNIQUE
             )
         `);
+        // Check for duplicates case-insensitively
+        const [existingVal] = await db.query(
+            `SELECT id FROM \`${tableName}\` WHERE LOWER(TRIM(value)) = LOWER(?)`,
+            [trimmedValue]
+        );
+        
+        if (existingVal.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: "This attribute value already exists."
+            });
+        }
         
         // Reject duplicates (case-insensitive) instead of silently ignoring them
         const [existing] = await db.query(
@@ -332,7 +371,7 @@ router.post('/attributes/:attributeId/values', authMiddleware, async (req, res) 
         res.json({
             success: true,
             message: 'Value added successfully',
-            data: { value: value.trim() }
+            data: { value: trimmedValue }
         });
     } catch (error) {
         console.error('Error adding attribute value:', error);
