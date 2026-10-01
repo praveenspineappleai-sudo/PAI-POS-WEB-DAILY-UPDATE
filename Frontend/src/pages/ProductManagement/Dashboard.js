@@ -268,7 +268,7 @@ const Dashboard = () => {
     {
       id: 'sales',
       label: 'Total Sales(Today)',
-      value: apiData?.totalSales || 'RS 1,245,680',
+      value: apiData?.totalSales || 'Rs 1,245,680',
       change: apiData?.totalSalesChange || '↑ 18.6%',
       isPositive: apiData?.isSalesPositive !== false,
       tone: 'green',

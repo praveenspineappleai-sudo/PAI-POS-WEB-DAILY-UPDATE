@@ -92,6 +92,7 @@
   overflow: hidden;
   min-height: 124px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  justify-content: center;   /* ADD */
 }
 
 .stat-card:hover {
@@ -124,10 +125,12 @@
 }
 
 .stat-content-block {
-  flex: 1;
+ flex: 0 1 auto;            /* CHANGE flex: 1 → flex: 0 1 auto */
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: flex-start;   /* ADD */
+  text-align: left;          /* ADD */
 }
 
 .stat-label {
@@ -136,6 +139,8 @@
   font-size: 16px;
   font-weight: 500;
   letter-spacing: -0.2px;
+  white-space: nowrap;       /* ADD */
+  
 }
 
 .stat-value {
