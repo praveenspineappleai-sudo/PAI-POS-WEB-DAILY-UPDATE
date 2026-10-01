@@ -112,8 +112,14 @@ module.exports = (sequelize, DataTypes) => {
 
       // Quantity associated with the price entry
       quantity: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(10, 3),
         allowNull: false,
+      },
+
+      unit: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: 'pcs'
       },
 
       // Foreign key referencing the Barcode model

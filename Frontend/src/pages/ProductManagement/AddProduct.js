@@ -61,6 +61,15 @@ const validateProductName = (name) => {
         };
     }
 
+    // DEF_011: Maximum Character Validation
+    const MAX_PRODUCT_NAME_LENGTH = 255;
+    if (name.trim().length > MAX_PRODUCT_NAME_LENGTH) {
+        return {
+            isValid: false,
+            message: `Product name cannot exceed ${MAX_PRODUCT_NAME_LENGTH} characters.`
+        };
+    }
+
     return { isValid: true, message: '' };
 };
 
@@ -107,6 +116,7 @@ const AddProduct = () => {
 
     const [productAttributes, setProductAttributes] = useState({
         quantity: editProductData?.quantity || '',
+        unit: editProductData?.unit || 'pcs',
         costPrice: editProductData?.costPrice || '',
         sellingPrice: editProductData?.sellingPrice || '',
         color: editProductData?.color || '',
@@ -414,12 +424,15 @@ const AddProduct = () => {
 
         const fieldName = (attribute.labelName || '').toLowerCase().replace(/\s+/g, '_');
 
-        const duplicate = (attributeOptions[fieldName] || []).some(
-            v => String(v).trim().toLowerCase() === inputVal.trim().toLowerCase()
+        // DEF_009: Prevent duplicate values
+        const existingOptions = attributeOptions[fieldName] || [];
+        const isDuplicate = existingOptions.some(
+            existingValue => existingValue.trim().toLowerCase() === value.toLowerCase()
         );
-        if (duplicate) {
-            showToast('Warning', `${attribute.labelName} "${inputVal.trim()}" already exists. Please select it from the list.`, 'warning');
-            setAddValueModal({ open: false, attribute: null, inputVal: '', saving: false });
+
+        if (isDuplicate) {
+            showToast('Error', 'This attribute value already exists.', 'error');
+            setAddValueModal(prev => ({ ...prev, saving: false }));
             return;
         }
 
@@ -494,13 +507,14 @@ const AddProduct = () => {
 
             setProductAttributes(prev => ({
                 quantity: prev.quantity,
+                unit: prev.unit || 'pcs',
                 costPrice: prev.costPrice,
                 sellingPrice: prev.sellingPrice,
                 color: prev.color,
                 size: prev.size,
                 barcode: '',
                 ...Object.keys(prev).reduce((acc, key) => {
-                    if (!['quantity', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(key)) {
+                    if (!['quantity', 'unit', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(key)) {
                         acc[key] = '';
                     }
                     return acc;
@@ -517,16 +531,33 @@ const AddProduct = () => {
     };
 
     const handleAttributesChange = (field, value) => {
-        const isCustomAttribute = !['quantity', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(field);
-
+        let filteredValue = value;
+        if (['quantity', 'costPrice', 'sellingPrice'].includes(field)) {
+            // Remove negative signs, letters, and special characters
+            filteredValue = filteredValue.replace(/[^0-9.]/g, '');
+            // Prevent multiple decimals
+            const parts = filteredValue.split('.');
+            if (parts.length > 2) {
+                filteredValue = parts[0] + '.' + parts.slice(1).join('');
+            }
+            // Block exactly '0' while typing
+            if (filteredValue === '0') {
+                filteredValue = '';
+            }
+        }
         if (field === 'quantity') {
             // Numbers of 1 and above, decimals allowed: drop everything except digits and a single decimal point
             let cleaned = value.replace(/[^\d.]/g, '');
+
             const firstDot = cleaned.indexOf('.');
+
             if (firstDot !== -1) {
                 // Keep only the first decimal point; strip any extra ones
-                cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+                cleaned =
+                    cleaned.slice(0, firstDot + 1) +
+                    cleaned.slice(firstDot + 1).replace(/\./g, '');
             }
+
             // Collapse leading zeros (e.g. "007" -> "7") but keep a leading "0." as typed (e.g. "0.5")
             cleaned = cleaned.replace(/^0+(?=\d)/, '');
 
@@ -534,21 +565,36 @@ const AddProduct = () => {
                 ...prev,
                 quantity: getQuantityError(cleaned)
             }));
-            setProductAttributes(prev => ({ ...prev, quantity: cleaned }));
+
+            setProductAttributes(prev => ({
+                ...prev,
+                quantity: cleaned
+            }));
+
             return;
         }
 
-        if (value.trim() !== '') {
-            setAttributeValidationErrors(prev => ({ ...prev, [field]: '' }));
+        const isCustomAttribute =
+            !['quantity', 'unit', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode']
+                .includes(field);
+
+        if (filteredValue.trim() !== '') {
+            setAttributeValidationErrors(prev => ({
+                ...prev,
+                [field]: ''
+            }));
         }
 
         if (isCustomAttribute) {
             setCustomAttributeValues(prev => ({
                 ...prev,
-                [field]: stripSpecialCharacters(value)
+                [field]: filteredValue
             }));
         } else {
-            setProductAttributes(prev => ({ ...prev, [field]: value }));
+            setProductAttributes(prev => ({
+                ...prev,
+                [field]: filteredValue
+            }));
         }
     };
 
@@ -565,7 +611,7 @@ const AddProduct = () => {
             };
 
             setAddedProducts(prev => [...prev, newProduct]);
-            setProductAttributes({ quantity: '', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
+            setProductAttributes({ quantity: '', unit: 'pcs', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
             setCustomAttributeValues({});
             setBarcodePopupOpen(false);
             setPendingProduct(null);
@@ -574,17 +620,31 @@ const AddProduct = () => {
     };
 
     const handleAddBarcode = (barcodeValue) => {
-        if (pendingProduct && barcodeValue.trim() !== '') {
+        const normalizedBarcode = String(barcodeValue || '').trim();
+        if (pendingProduct && normalizedBarcode !== '') {
+            const BARCODE_PATTERN = /^[A-Za-z0-9]+$/;
+            if (!BARCODE_PATTERN.test(normalizedBarcode)) {
+                return 'Barcode can contain only letters and numbers.';
+            }
+
+            // DEF_025: Local duplicate check
+            const existsLocally = addedProducts.some(
+                product => String(product.barcode || '').trim().toLowerCase() === normalizedBarcode.toLowerCase()
+            );
+            if (existsLocally) {
+                return 'Barcode already exists. Please use a unique barcode.';
+            }
+
             setBarcodeMode('custom');
             const newProduct = {
                 ...pendingProduct,
-                barcode: barcodeValue.trim(),
+                barcode: normalizedBarcode,
                 status: parseFloat(pendingProduct.quantity) === 0 ? 'Out of stock' :
                     parseFloat(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
             };
 
             setAddedProducts(prev => [...prev, newProduct]);
-            setProductAttributes({ quantity: '', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
+            setProductAttributes({ quantity: '', unit: 'pcs', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
             setCustomAttributeValues({});
             setAddBarcodePopupOpen(false);
             setPendingProduct(null);
@@ -624,6 +684,34 @@ const AddProduct = () => {
         const quantityError = getQuantityError(productAttributes.quantity);
         if (quantityError) {
             setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
+            return;
+        }
+
+        const qtyValue = Number(productAttributes.quantity);
+        const cpValue = Number(productAttributes.costPrice);
+        const spValue = Number(productAttributes.sellingPrice);
+
+        const newErrors = {};
+
+        if (!Number.isFinite(qtyValue) || qtyValue < 0.1) {
+            newErrors.quantity = 'Quantity must be at least 0.1.';
+        }
+
+        if (!Number.isFinite(cpValue) || cpValue < 0.1) {
+            newErrors.costPrice = 'Cost price must be at least 0.1.';
+        }
+
+        if (!Number.isFinite(spValue) || spValue < 0.1) {
+            newErrors.sellingPrice = 'Selling price must be at least 0.1.';
+        }
+
+        const decimalUnits = ['kg', 'g', 'L', 'ml'];
+        if (Number.isFinite(qtyValue) && !decimalUnits.includes(productAttributes.unit || 'pcs') && !Number.isInteger(qtyValue)) {
+            newErrors.quantity = 'Please enter a whole number for this unit.';
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setAttributeValidationErrors(newErrors);
             return;
         }
 
@@ -744,7 +832,8 @@ const AddProduct = () => {
                     name: basicDetails.name,
                     description: basicDetails.description || '',
                     category_id: finalCategoryId,
-                    quantity: parseInt(productAttributes.quantity),
+                    quantity: parseFloat(productAttributes.quantity),
+                    unit: productAttributes.unit || 'pcs',
                     cost_price: parseFloat(productAttributes.costPrice || 0),
                     selling_price: parseFloat(productAttributes.sellingPrice),
                 };
@@ -786,7 +875,8 @@ const AddProduct = () => {
                     const sizeId = getSizeIdByName(product.size, sizesRaw);
 
                     const variation = {
-                        quantity: parseInt(product.quantity),
+                        quantity: parseFloat(product.quantity),
+                        unit: product.unit || 'pcs',
                         cost_price: parseFloat(product.costPrice || 0),
                         selling_price: parseFloat(product.sellingPrice),
                     };
@@ -1057,12 +1147,50 @@ const AddProduct = () => {
             const placeholder = `Type your ${labelName.toLowerCase()}`;
             const onChange = (e) => handleAttributesChange(fieldName, e.target.value);
 
+            if (fieldName === 'quantity') {
+                return (
+                    <div className={`form-group ${fieldName}-field`}>
+                        <label>{labelName}</label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <input
+                                type={type === 'number' ? 'number' : 'text'}
+                                min={fieldName === 'quantity' ? "0.1" : undefined}
+                                placeholder={placeholder}
+                                value={value}
+                                onChange={onChange}
+                                className="form-input"
+                                style={{ flex: 1 }}
+                            />
+                            <select
+                                value={productAttributes.unit || 'pcs'}
+                                onChange={(e) => handleAttributesChange('unit', e.target.value)}
+                                className="form-input"
+                                style={{ width: '80px', padding: '0 10px', backgroundColor: '#f7fbff' }}
+                            >
+                                <option value="pcs">pcs</option>
+                                <option value="kg">kg</option>
+                                <option value="g">g</option>
+                                <option value="L">L</option>
+                                <option value="ml">ml</option>
+                                <option value="box">box</option>
+                                <option value="pack">pack</option>
+                            </select>
+                        </div>
+                        {attributeValidationErrors[fieldName] && (
+                            <span className="validation-error">{attributeValidationErrors[fieldName]}</span>
+                        )}
+                    </div>
+                );
+            }
+
             return (
                 <div className={`form-group ${fieldName}-field`}>
                     <label>{labelName}</label>
                     <input
-                        type={type === 'number' && fieldName !== 'quantity' ? 'number' : 'text'}
+                        type={type === 'number' ? 'number' : 'text'}
                         inputMode={fieldName === 'quantity' ? 'decimal' : undefined}
+                        min={['costPrice', 'sellingPrice', 'quantity'].includes(fieldName) ? '0.1' : undefined}
+                        step={['costPrice', 'sellingPrice'].includes(fieldName) ? '0.01' : undefined}
                         placeholder={placeholder}
                         value={value}
                         onChange={onChange}
@@ -1094,6 +1222,7 @@ const AddProduct = () => {
                     color: productAttributes.color,
                     size: productAttributes.size,
                     quantity: productAttributes.quantity,
+                    unit: productAttributes.unit || 'pcs',
                     sellingPrice: productAttributes.sellingPrice,
                     costPrice: productAttributes.costPrice,
                     customAttributes: { ...customAttributeValues },
@@ -1110,7 +1239,7 @@ const AddProduct = () => {
                 addedProducts: addedProducts.map(p => {
                     const customAttrs = p.customAttributes ? { ...p.customAttributes } : {};
                     Object.keys(p).forEach(key => {
-                        if (!['id', 'name', 'category', 'description', 'color', 'size', 'quantity', 'sellingPrice', 'costPrice', 'barcode', 'status', 'customAttributes'].includes(key)) {
+                        if (!['id', 'name', 'category', 'description', 'color', 'size', 'quantity', 'unit', 'sellingPrice', 'costPrice', 'barcode', 'status', 'customAttributes'].includes(key)) {
                             customAttrs[key] = p[key];
                         }
                     });
@@ -1119,6 +1248,7 @@ const AddProduct = () => {
                         color: p.color,
                         size: p.size,
                         quantity: p.quantity,
+                        unit: p.unit || 'pcs',
                         sellingPrice: p.sellingPrice,
                         costPrice: p.costPrice,
                         customAttributes: customAttrs,
@@ -1248,6 +1378,7 @@ const AddProduct = () => {
                                         value={basicDetails.name}
                                         onChange={(e) => handleBasicDetailsChange('name', e.target.value)}
                                         className="form-input"
+                                        maxLength={255}
                                     />
                                     {validationErrors.name && (
                                         <span className="validation-error">{validationErrors.name}</span>
@@ -1392,7 +1523,7 @@ const AddProduct = () => {
                                                             <img src={quantityIcon} alt="Quantity" className="attr-icon" />
                                                             <div className="attr-details">
                                                                 <span className="attr-label">Quantity</span>
-                                                                <span className="attr-value">{product.quantity}</span>
+                                                                <span className="attr-value">{product.quantity} {product.unit || 'pcs'}</span>
                                                             </div>
                                                         </div>
                                                     )}

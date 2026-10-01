@@ -3,20 +3,42 @@ import "../styles/addbarcode.css";
 // This component is a popup for adding a barcode to a product variant when a duplicate variant is detected without a barcode.
 const AddBarcode = ({ isOpen, onClose, onSave, pendingProduct }) => {
   const [barcodeNumber, setBarcodeNumber] = useState("");
+  const [error, setError] = useState("");
 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    if (barcodeNumber.trim()) {
-      onSave(barcodeNumber);
-      onClose();
+    const normalizedBarcode = String(barcodeNumber || '').trim();
+    if (!normalizedBarcode) return;
+
+    // DEF_021, DEF_022, DEF_023: Validate barcode format (alphanumeric based on frontend generating 'BAR123456')
+    const BARCODE_PATTERN = /^[A-Za-z0-9]+$/;
+    if (!BARCODE_PATTERN.test(normalizedBarcode)) {
+      setError('Barcode can contain only letters and numbers.');
+      return;
     }
+
+    const saveResult = onSave(normalizedBarcode);
+    if (typeof saveResult === 'string') {
+      setError(saveResult);
+      return;
+    }
+    
+    // Success, reset and close (if parent hasn't already closed)
+    setBarcodeNumber("");
+    setError("");
+    onClose();
   };
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
       handleSave();
     }
+  };
+
+  const handleInputChange = (e) => {
+    setBarcodeNumber(e.target.value);
+    if (error) setError(""); // Clear error when typing
   };
 
   return (
@@ -44,10 +66,11 @@ const AddBarcode = ({ isOpen, onClose, onSave, pendingProduct }) => {
               className="addbarcode-input"
               placeholder="Enter barcode"
               value={barcodeNumber}
-              onChange={(e) => setBarcodeNumber(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               autoFocus
             />
+            {error && <span className="validation-error" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>{error}</span>}
           </div>
 
           {/* Save Button */}
