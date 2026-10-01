@@ -526,19 +526,34 @@ const AddProduct = () => {
     };
 
     const handleAttributesChange = (field, value) => {
+        let filteredValue = value;
+        if (['quantity', 'costPrice', 'sellingPrice'].includes(field)) {
+            // Remove negative signs, letters, and special characters
+            filteredValue = filteredValue.replace(/[^0-9.]/g, '');
+            // Prevent multiple decimals
+            const parts = filteredValue.split('.');
+            if (parts.length > 2) {
+                filteredValue = parts[0] + '.' + parts.slice(1).join('');
+            }
+            // Block exactly '0' while typing
+            if (filteredValue === '0') {
+                filteredValue = '';
+            }
+        }
+
         const isCustomAttribute = !['quantity', 'unit', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(field);
 
-        if (value.trim() !== '') {
+        if (filteredValue.trim() !== '') {
             setAttributeValidationErrors(prev => ({ ...prev, [field]: '' }));
         }
 
         if (isCustomAttribute) {
             setCustomAttributeValues(prev => ({
                 ...prev,
-                [field]: value
+                [field]: filteredValue
             }));
         } else {
-            setProductAttributes(prev => ({ ...prev, [field]: value }));
+            setProductAttributes(prev => ({ ...prev, [field]: filteredValue }));
         }
     };
 
@@ -630,16 +645,16 @@ const AddProduct = () => {
         
         const newErrors = {};
 
-        if (!Number.isFinite(qtyValue) || qtyValue < 0) {
-            newErrors.quantity = 'Invalid quantity.';
+        if (!Number.isFinite(qtyValue) || qtyValue < 0.1) {
+            newErrors.quantity = 'Quantity must be at least 0.1.';
         }
 
-        if (!Number.isFinite(cpValue) || cpValue < 0) {
-            newErrors.costPrice = 'Cost price must be a non-negative number.';
+        if (!Number.isFinite(cpValue) || cpValue < 0.1) {
+            newErrors.costPrice = 'Cost price must be at least 0.1.';
         }
 
-        if (!Number.isFinite(spValue) || spValue < 0) {
-            newErrors.sellingPrice = 'Selling price must be a non-negative number.';
+        if (!Number.isFinite(spValue) || spValue < 0.1) {
+            newErrors.sellingPrice = 'Selling price must be at least 0.1.';
         }
 
         const decimalUnits = ['kg', 'g', 'L', 'ml'];
@@ -1072,6 +1087,7 @@ const AddProduct = () => {
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <input
                                 type={type === 'number' ? 'number' : 'text'}
+                                min={fieldName === 'quantity' ? "0.1" : undefined}
                                 placeholder={placeholder}
                                 value={value}
                                 onChange={onChange}
@@ -1105,7 +1121,7 @@ const AddProduct = () => {
                     <label>{labelName}</label>
                     <input
                         type={type === 'number' ? 'number' : 'text'}
-                        min={['costPrice', 'sellingPrice'].includes(fieldName) ? "0" : undefined}
+                        min={['costPrice', 'sellingPrice', 'quantity'].includes(fieldName) ? "0.1" : undefined}
                         step={['costPrice', 'sellingPrice'].includes(fieldName) ? "0.01" : undefined}
                         placeholder={placeholder}
                         value={value}

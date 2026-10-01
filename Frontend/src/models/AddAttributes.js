@@ -43,9 +43,10 @@ const AddAttributes = ({
     }, [isOpen, initialAttributes]);
     // Handle label name change
     const handleLabelNameChange = (id, value) => {
+        const filteredValue = value.replace(/[^A-Za-z]/g, '');
         setValidationErrors(prev => ({ ...prev, [id]: '' }));
         setAttributes(prev => prev.map(attr => 
-            attr.id === id ? { ...attr, labelName: value } : attr
+            attr.id === id ? { ...attr, labelName: filteredValue } : attr
         ));
     };
     // Add new attribute
