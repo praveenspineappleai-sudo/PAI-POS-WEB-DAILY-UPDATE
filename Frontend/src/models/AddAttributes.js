@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ProcessOrderButton from '../components/buttons/ProceedOrderButton';
 import AddButton from '../components/buttons/AddButton';
 import DeleteButton from '../components/buttons/DeleteButton';
-import { hasSpecialCharacters, stripSpecialCharacters, SPECIAL_CHARS_MESSAGE } from '../pages/ProductManagement/categoryAttributeUtils';
+import { stripSpecialCharacters } from '../pages/ProductManagement/categoryAttributeUtils';
 import '../styles/addattributes.css';
 
 const AddAttributes = ({ 
@@ -44,7 +44,8 @@ const AddAttributes = ({
     }, [isOpen, initialAttributes]);
     // Handle label name change
     const handleLabelNameChange = (id, value) => {
-        setValidationMessage(hasSpecialCharacters(value) ? SPECIAL_CHARS_MESSAGE : '');
+        // Special characters are stripped silently, no warning shown
+        setValidationMessage('');
         setAttributes(prev => prev.map(attr =>
             attr.id === id ? { ...attr, labelName: stripSpecialCharacters(value) } : attr
         ));
@@ -86,9 +87,9 @@ const AddAttributes = ({
             else if (val.length > 255) {
                 newErrors[attr.id] = 'Label name must be 255 characters or fewer.';
             }
-            // DEF_012: Special characters only
-            else if (!/[A-Za-z0-9]/.test(val)) {
-                newErrors[attr.id] = 'Attribute name cannot contain only special characters.';
+            // Must contain at least one letter (text, or text with numbers); numbers only are not allowed
+            else if (!/\p{L}/u.test(val)) {
+                newErrors[attr.id] = 'Attribute name cannot be numbers only. Add at least one letter.';
             }
             // DEF_009: Duplicate values
             else if (seen.has(normalized)) {
@@ -118,13 +119,10 @@ const AddAttributes = ({
     };
 
     const handleCancel = () => {
-        if (!hasSavedAttributes) {
-            setValidationMessage('* Please add at least one attribute before closing');
-            return;
-        }
-
-        // Clear attributes when canceling
+        // Clear attributes and messages when canceling
         setAttributes([{ id: Date.now(), labelName: '' }]);
+        setValidationMessage('');
+        setValidationErrors({});
         onClose();
     };
 

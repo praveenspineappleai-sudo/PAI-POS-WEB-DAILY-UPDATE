@@ -425,6 +425,12 @@ const AddProduct = () => {
         const { attribute, inputVal } = addValueModal;
         const value = inputVal.trim();
 
+        // Numbers only are not allowed; text, or text with numbers, is fine
+        if (!/\p{L}/u.test(value) || hasSpecialCharacters(value)) {
+            showToast('Error', 'Value cannot be numbers only. Use letters, or letters with numbers.', 'error');
+            return;
+        }
+
         setAddValueModal(prev => ({ ...prev, saving: true }));
 
         const fieldName = (attribute.labelName || '').toLowerCase().replace(/\s+/g, '_');
