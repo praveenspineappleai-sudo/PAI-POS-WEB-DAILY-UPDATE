@@ -18,6 +18,12 @@ const AddBarcode = ({ isOpen, onClose, onSave, pendingProduct }) => {
       return;
     }
 
+    // A purely numeric barcode must be 1 or greater
+    if (/^\d+$/.test(normalizedBarcode) && Number(normalizedBarcode) < 1) {
+      setError('Numeric barcode must be 1 or greater.');
+      return;
+    }
+
     const saveResult = onSave(normalizedBarcode);
     if (typeof saveResult === 'string') {
       setError(saveResult);
@@ -37,7 +43,8 @@ const AddBarcode = ({ isOpen, onClose, onSave, pendingProduct }) => {
   };
 
   const handleInputChange = (e) => {
-    setBarcodeNumber(e.target.value);
+    // Allow only letters and whole numbers; strip everything else (spaces, symbols, decimals, minus)
+    setBarcodeNumber(e.target.value.replace(/[^A-Za-z0-9]/g, ''));
     if (error) setError(""); // Clear error when typing
   };
 

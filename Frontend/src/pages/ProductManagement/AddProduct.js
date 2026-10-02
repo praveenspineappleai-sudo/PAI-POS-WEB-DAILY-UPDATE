@@ -74,9 +74,14 @@ const validateProductName = (name) => {
 };
 
 // Validation function for quantity (numbers, decimals allowed, 1 and above)
-const getQuantityError = (quantity) => {
+// Countable units only allow whole numbers; other units allow decimals
+const WHOLE_NUMBER_UNITS = ['pcs', 'box', 'pack'];
+const isWholeNumberUnit = (unit) => WHOLE_NUMBER_UNITS.includes(unit || 'pcs');
+
+const getQuantityError = (quantity, unit) => {
     const value = String(quantity ?? '').trim();
     if (value === '') return '* Quantity cannot be empty';
+    if (isWholeNumberUnit(unit) && !/^\d+$/.test(value)) return `* Quantity must be a whole number for ${unit || 'pcs'}`;
     if (!/^\d+(\.\d+)?$/.test(value)) return '* Quantity must be a number of 1 or more';
     const numeric = parseFloat(value);
     if (!Number.isFinite(numeric) || numeric < 1) return '* Quantity must be a number of 1 or more';
@@ -531,6 +536,15 @@ const AddProduct = () => {
     };
 
     const handleAttributesChange = (field, value) => {
+        if (field === 'unit') {
+            const currentQty = String(productAttributes.quantity ?? '');
+            const newQty = isWholeNumberUnit(value) ? currentQty.split('.')[0] : currentQty;
+            setProductAttributes(prev => ({ ...prev, unit: value, quantity: newQty }));
+            if (newQty !== '') {
+                setAttributeValidationErrors(prev => ({ ...prev, quantity: getQuantityError(newQty, value) }));
+            }
+            return;
+        }
         let filteredValue = value;
         if (['quantity', 'costPrice', 'sellingPrice'].includes(field)) {
             // Remove negative signs, letters, and special characters
@@ -547,7 +561,8 @@ const AddProduct = () => {
         }
         if (field === 'quantity') {
             // Numbers of 1 and above, decimals allowed: drop everything except digits and a single decimal point
-            let cleaned = value.replace(/[^\d.]/g, '');
+            const wholeOnly = isWholeNumberUnit(productAttributes.unit);
+            let cleaned = value.replace(wholeOnly ? /[^\d]/g : /[^\d.]/g, '');
 
             const firstDot = cleaned.indexOf('.');
 
@@ -563,7 +578,7 @@ const AddProduct = () => {
 
             setAttributeValidationErrors(prev => ({
                 ...prev,
-                quantity: getQuantityError(cleaned)
+                quantity: getQuantityError(cleaned, productAttributes.unit)
             }));
 
             setProductAttributes(prev => ({
@@ -681,7 +696,7 @@ const AddProduct = () => {
             setAttributeValidationErrors(missingAttributes);
             return;
         }
-        const quantityError = getQuantityError(productAttributes.quantity);
+        const quantityError = getQuantityError(productAttributes.quantity, productAttributes.unit);
         if (quantityError) {
             setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
             return;
@@ -763,7 +778,7 @@ const AddProduct = () => {
                 return;
             }
 
-            const quantityError = getQuantityError(productAttributes.quantity);
+            const quantityError = getQuantityError(productAttributes.quantity, productAttributes.unit);
             if (quantityError) {
                 setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
                 return;
@@ -1158,6 +1173,15 @@ const AddProduct = () => {
                                 placeholder={placeholder}
                                 value={value}
                                 onChange={onChange}
+                                step={isWholeNumberUnit(productAttributes.unit) ? '1' : 'any'}
+                                onKeyDown={(e) => {
+                                    const blocked = isWholeNumberUnit(productAttributes.unit) ? ['-', '+', 'e', 'E', '.'] : ['-', '+', 'e', 'E'];
+                                    if (blocked.includes(e.key)) e.preventDefault();
+                                }}
+                                onPaste={(e) => {
+                                    const pattern = isWholeNumberUnit(productAttributes.unit) ? /[-+eE.]/ : /[-+eE]/;
+                                    if (pattern.test(e.clipboardData.getData('text'))) e.preventDefault();
+                                }}
                                 className="form-input"
                                 style={{ flex: 1 }}
                             />
@@ -1194,6 +1218,7 @@ const AddProduct = () => {
                         placeholder={placeholder}
                         value={value}
                         onChange={onChange}
+                        onKeyDown={(e) => type === 'number' && ['-', '+', 'e', 'E'].includes(e.key) && e.preventDefault()}
                         className="form-input"
                     />
                     {attributeValidationErrors[fieldName] && (
