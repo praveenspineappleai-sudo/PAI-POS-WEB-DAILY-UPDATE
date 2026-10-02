@@ -68,7 +68,12 @@ export default function AddCashier({ isOpen, onClose, onSubmit }) {
   };
   // Handle form input changes
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    let { value } = e.target;
+    // Cashier name: block special characters (letters, numbers and spaces only)
+    if (name === "name") {
+      value = value.replace(/[^\p{L}\p{N} ]/gu, "");
+    }
     setFormData({
       ...formData,
       [name]: value
