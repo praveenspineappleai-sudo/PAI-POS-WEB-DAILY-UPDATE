@@ -647,6 +647,12 @@ const AddProduct = () => {
             if (!BARCODE_PATTERN.test(normalizedBarcode)) {
                 return 'Barcode can contain only letters and numbers.';
             }
+            if (/^\d+$/.test(normalizedBarcode)) {
+                return 'Barcode cannot be numbers only. Use letters together with numbers.';
+            }
+            if (/^[A-Za-z]+$/.test(normalizedBarcode)) {
+                return 'Barcode cannot be letters only. Use numbers together with letters.';
+            }
 
             // DEF_025: Local duplicate check
             const existsLocally = addedProducts.some(

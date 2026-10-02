@@ -18,9 +18,13 @@ const AddBarcode = ({ isOpen, onClose, onSave, pendingProduct }) => {
       return;
     }
 
-    // A purely numeric barcode must be 1 or greater
-    if (/^\d+$/.test(normalizedBarcode) && Number(normalizedBarcode) < 1) {
-      setError('Numeric barcode must be 1 or greater.');
+    // Barcode must contain both letters and numbers
+    if (/^\d+$/.test(normalizedBarcode)) {
+      setError('Barcode cannot be numbers only. Use letters together with numbers.');
+      return;
+    }
+    if (/^[A-Za-z]+$/.test(normalizedBarcode)) {
+      setError('Barcode cannot be letters only. Use numbers together with letters.');
       return;
     }
 
