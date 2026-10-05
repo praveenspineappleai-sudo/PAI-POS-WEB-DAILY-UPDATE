@@ -93,6 +93,17 @@
     color: #BFBFBF;
 }
 
+.modal-input-error,
+.modal-input-error:focus {
+    border-color: #dc2626;
+    box-shadow: none;
+}
+
+.modal-error-text {
+    color: #dc2626;
+    font-size: 13px;
+}
+
 .modal-actions {
     padding: 20px;
     border-top: 1px solid #e5e7eb;

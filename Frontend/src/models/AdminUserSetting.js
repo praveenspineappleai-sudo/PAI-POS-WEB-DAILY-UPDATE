@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import "../styles/admin.css";
 import AddCashier from "./AddCashier";
 import AccountDelete from "./AccountDelete";
-import NeedHelp from "./NeedHelp"; 
+import NeedHelp from "./NeedHelp";
+import ConfirmationPopup from "./ConfirmationPopup";
 import { logout } from "../integration/LogoutAPI";
 import { clearAllCookies } from "../integration/AuthAPI";
 import { fetchCashiers, deleteCashier } from "../integration/AccountManagementAPI";
@@ -37,6 +38,7 @@ export default function AdminUserSetting({
   const [cashiers, setCashiers] = useState([]);
   const [isLoadingCashiers, setIsLoadingCashiers] = useState(false);
   const [showCashierList, setShowCashierList] = useState(false);
+  const [cashierToDelete, setCashierToDelete] = useState(null);
 
   // Fetch cashiers when popup opens - MUST BE BEFORE CONDITIONAL RETURN
   useEffect(() => {
@@ -67,22 +69,26 @@ export default function AdminUserSetting({
   };
 
   const handleDeleteCashier = async (cashierId) => {
-    if (window.confirm('Are you sure you want to delete this cashier?')) {
-      try {
-        const result = await deleteCashier(cashierId);
-        if (result.success) {
-          // Reload cashiers list
-          loadCashiers();
-          console.log('Cashier deleted successfully');
-        } else {
-          console.error('Failed to delete cashier:', result.error);
-          alert('Failed to delete cashier. Please try again.');
-        }
-      } catch (error) {
-        console.error('Error deleting cashier:', error);
-        alert('An error occurred while deleting cashier.');
+    try {
+      const result = await deleteCashier(cashierId);
+      if (result.success) {
+        // Reload cashiers list
+        loadCashiers();
+        console.log('Cashier deleted successfully');
+      } else {
+        console.error('Failed to delete cashier:', result.error);
+        alert('Failed to delete cashier. Please try again.');
       }
+    } catch (error) {
+      console.error('Error deleting cashier:', error);
+      alert('An error occurred while deleting cashier.');
     }
+  };
+
+  const handleConfirmDeleteCashier = () => {
+    const id = cashierToDelete;
+    setCashierToDelete(null);
+    if (id !== null) handleDeleteCashier(id);
   };
 
   const handleNavigation = (path) => {
@@ -281,7 +287,7 @@ export default function AdminUserSetting({
                           className="cashier-delete-btn"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteCashier(cashier.id);
+                            setCashierToDelete(cashier.id);
                           }}
                           title="Delete cashier"
                         >
@@ -351,6 +357,15 @@ export default function AdminUserSetting({
           </div>
         </div>
       )}
+
+      {/* Delete Cashier Confirmation */}
+      <ConfirmationPopup
+        isOpen={cashierToDelete !== null}
+        onClose={() => setCashierToDelete(null)}
+        onConfirm={handleConfirmDeleteCashier}
+        title="Confirm Deletion"
+        message="Are you sure you want to delete this cashier?"
+      />
 
       {/* Add Cashier Modal */}
       {showAddCashier && (

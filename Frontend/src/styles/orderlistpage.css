@@ -18,10 +18,12 @@
 }
 
 .orderlist-page {
-  min-height: 100vh;
+  height: 100vh;
   background-color: #f5f5f5;
   padding-bottom: 20px;
   overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .orderlist-container {
@@ -144,6 +146,7 @@
 /* Right panel - Order list */
 .right-panel {
   width: 500px;
+  max-width: 100%;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);

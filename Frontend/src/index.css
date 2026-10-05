@@ -4,6 +4,13 @@
   box-sizing: border-box;
 }
 
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
 html {
   height: 100%;
   overflow: hidden; 

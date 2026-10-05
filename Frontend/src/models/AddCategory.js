@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import ProcessOrderButton from '../components/buttons/ProceedOrderButton';
 import { createCategory } from '../integration/CategoryAPI';
+import { hasSpecialCharacters, stripSpecialCharacters, SPECIAL_CHARS_MESSAGE } from '../pages/ProductManagement/categoryAttributeUtils';
 import '../styles/addcategory.css';
 
 // This component is a popup for adding a new category, color, size, or custom attribute value.
@@ -13,23 +14,30 @@ const AddCategory = ({
     existingItems = []
 }) => {
     const [inputValue, setInputValue] = useState('');
+    const [error, setError] = useState('');
 
     // Handle adding new category, color, size, or custom attribute value
-    const handleAdd = () => {
-        if (inputValue.trim() !== '') {
-            // Capitalize first letter
-            const capitalized = inputValue.trim().charAt(0).toUpperCase() + inputValue.trim().slice(1);
 
-            // Call parent handler
-            onAdd(capitalized);
+const handleAdd = () => {
+  const value = inputValue.trim();
 
-            // Reset input
-            setInputValue('');
+  if (!value) {
+    return;
+  }
 
-            // Close modal
-            onClose();
-        }
-    };
+  if (hasSpecialCharacters(value)) {
+    setError(SPECIAL_CHARS_MESSAGE);
+    return;
+  }
+
+  const capitalized =
+    value.charAt(0).toUpperCase() + value.slice(1);
+
+  onAdd(capitalized);
+  setInputValue('');
+  setError('');
+  onClose();
+};
 
     // Handle Enter key press for adding item
     const handleKeyPress = (e) => {
@@ -43,6 +51,7 @@ const AddCategory = ({
         if (e.target === e.currentTarget) {
             onClose();
             setInputValue(''); // Reset input when closing
+            setError('');
         }
     };
 
@@ -94,6 +103,7 @@ const AddCategory = ({
                     <button className="modal-close-btn" onClick={() => {
                         onClose();
                         setInputValue('');
+                        setError('');
                     }}>
                         &#x2715;
                     </button>
@@ -106,11 +116,15 @@ const AddCategory = ({
                             type="text"
                             placeholder={getPlaceholder()}
                             value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
+                            onChange={(e) => {
+                                setInputValue(stripSpecialCharacters(e.target.value));
+                                if (error) setError('');
+                            }}
                             onKeyPress={handleKeyPress}
-                            className="modal-input"
+                            className={`modal-input${error ? ' modal-input-error' : ''}`}
                             autoFocus
                         />
+                        {error && <span className="modal-error-text">{error}</span>}
                     </div>
                 </div>
 

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../styles/login.css';
 import { login } from '../../integration/AuthAPI';
+import { checkEmailRegistered } from '../../integration/ForgotPasswordAPI';
 import EmailVerification from '../../models/EmailVerification';
 
 import eyeIcon from '../../assets/icons/eye.png';
@@ -25,6 +26,7 @@ const Login = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -47,18 +49,23 @@ const Login = () => {
       password: ''
     };
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email or username is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email) && formData.email.length < 3) {
-      // Basic validation for email format or minimum username length
-      newErrors.email = 'Please enter a valid email or username';
-    }
 
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
+const identifier = formData.email.trim();
+
+if (!identifier) {
+  newErrors.email = 'Email or username is required';
+} else if (
+  identifier.includes('@') &&
+  !/^\S+@\S+\.\S+$/.test(identifier)
+) {
+  newErrors.email = 'Please enter a valid email address';
+}
+
+if (!formData.password) {
+  newErrors.password = 'Password is required';
+} else if (formData.password.length < 6) {
+  newErrors.password = 'Password must be at least 6 characters';
+}
 
     setErrors(newErrors);
     return !newErrors.email && !newErrors.password;
@@ -117,12 +124,12 @@ const Login = () => {
     setShowPassword(!showPassword);
   };
 
-  const handleForgotPasswordClick = (e) => {
+  const handleForgotPasswordClick = async (e) => {
     e.preventDefault();
-    
+
     // Validate email before opening forgot password modal
     const emailValue = formData.email.trim();
-    
+
     if (!emailValue) {
       setErrors(prev => ({
         ...prev,
@@ -130,7 +137,7 @@ const Login = () => {
       }));
       return;
     }
-    
+
     // Basic email format validation
     if (!/\S+@\S+\.\S+/.test(emailValue)) {
       setErrors(prev => ({
@@ -139,9 +146,24 @@ const Login = () => {
       }));
       return;
     }
-    
-    // Clear any errors and open forgot password modal
+
+    // Clear any errors before checking whether the email is registered
     setErrors({ email: '', password: '' });
+    setIsCheckingEmail(true);
+
+    const result = await checkEmailRegistered(emailValue);
+
+    setIsCheckingEmail(false);
+
+    if (!result.registered) {
+      setErrors(prev => ({
+        ...prev,
+        email: result.error || 'Unregistered Email, Cannot Proceed'
+      }));
+      return;
+    }
+
+    // Email is registered - proceed to the forgot password modal
     setShowForgotPassword(true);
   };
 
@@ -249,9 +271,10 @@ const Login = () => {
               <a
                 href="#forgot"
                 className="forgot-password"
-                onClick={handleForgotPasswordClick}
+                onClick={isCheckingEmail ? (e) => e.preventDefault() : handleForgotPasswordClick}
+                aria-disabled={isCheckingEmail}
               >
-                Forgot password?
+                {isCheckingEmail ? 'Checking...' : 'Forgot password?'}
               </a>
             </div>
 

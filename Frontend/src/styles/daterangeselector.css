@@ -116,3 +116,43 @@
   padding: 4px;
   text-align: left;
 }
+
+@media (max-width: 1024px) {
+  .tab-navigation {
+    width: 40%;
+  }
+
+  .date-input-section {
+    width: 45%;
+  }
+
+  .date-range-inputs {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .modern-date-range-selector {
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .tab-navigation,
+  .date-input-section {
+    width: 100%;
+  }
+
+  .tab-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .date-range-inputs {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .date-range-inputs .date-input-wrapper {
+    flex: 1 1 140px;
+  }
+}

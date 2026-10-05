@@ -62,7 +62,8 @@ export const createProduct = async (productData, variations) => {
                 const payload = {
                     color_id: variation.color_id,
                     size_id: variation.size_id,
-                    quantity: parseInt(variation.quantity),
+                    quantity: parseFloat(variation.quantity),
+                    unit: variation.unit,
                     cost_price: parseFloat(variation.cost_price || 0),
                     selling_price: parseFloat(variation.selling_price),
                 };
@@ -75,7 +76,7 @@ export const createProduct = async (productData, variations) => {
 
                 // Copy any dynamic custom attributes
                 Object.keys(variation).forEach(key => {
-                    if (!['color_id', 'size_id', 'quantity', 'cost_price', 'selling_price', 'barcode', 'id', 'name', 'category', 'description'].includes(key)) {
+                    if (!['color_id', 'size_id', 'quantity', 'unit', 'cost_price', 'selling_price', 'barcode', 'id', 'name', 'category', 'description'].includes(key)) {
                         payload[key] = variation[key];
                     }
                 });

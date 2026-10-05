@@ -93,3 +93,35 @@
 .pagination-page--active:focus {
   outline-color: #ffffff;
 }
+
+.pagination-container {
+  flex-wrap: wrap;
+}
+
+.pagination-controls {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .pagination-container {
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .pagination-info {
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+  }
+
+  .pagination-page,
+  .pagination-nav {
+    min-width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+}

@@ -12,7 +12,7 @@ import AddAttributes from '../../models/AddAttributes';
 import NewBarcode from '../../models/NewBarcode';
 import AddBarcode from '../../models/AddBarcode';
 import { fetchCategories, createCategory, getCategoryName, createAttributesBulk, getCategoryAttributes, getAttributeValues, addAttributeValue } from '../../integration/CategoryAPI';
-import { normalizeCategoryAttributeDefinitions } from './categoryAttributeUtils';
+import { normalizeCategoryAttributeDefinitions, hasSpecialCharacters, stripSpecialCharacters, SPECIAL_CHARS_MESSAGE } from './categoryAttributeUtils';
 import { fetchColors, createColor, getColorName } from '../../integration/ColorsAPI';
 import { fetchSizes, createSize, getSizeName } from '../../integration/SizeAPI';
 import {
@@ -61,7 +61,31 @@ const validateProductName = (name) => {
         };
     }
 
+    // DEF_011: Maximum Character Validation
+    const MAX_PRODUCT_NAME_LENGTH = 255;
+    if (name.trim().length > MAX_PRODUCT_NAME_LENGTH) {
+        return {
+            isValid: false,
+            message: `Product name cannot exceed ${MAX_PRODUCT_NAME_LENGTH} characters.`
+        };
+    }
+
     return { isValid: true, message: '' };
+};
+
+// Validation function for quantity (numbers, decimals allowed, 1 and above)
+// Countable units only allow whole numbers; other units allow decimals
+const WHOLE_NUMBER_UNITS = ['pcs', 'box', 'pack'];
+const isWholeNumberUnit = (unit) => WHOLE_NUMBER_UNITS.includes(unit || 'pcs');
+
+const getQuantityError = (quantity, unit) => {
+    const value = String(quantity ?? '').trim();
+    if (value === '') return '* Quantity cannot be empty';
+    if (isWholeNumberUnit(unit) && !/^\d+$/.test(value)) return `* Quantity must be a whole number for ${unit || 'pcs'}`;
+    if (!/^\d+(\.\d+)?$/.test(value)) return '* Quantity must be a number of 1 or more';
+    const numeric = parseFloat(value);
+    if (!Number.isFinite(numeric) || numeric < 1) return '* Quantity must be a number of 1 or more';
+    return '';
 };
 
 // Get icon for custom attribute
@@ -97,6 +121,7 @@ const AddProduct = () => {
 
     const [productAttributes, setProductAttributes] = useState({
         quantity: editProductData?.quantity || '',
+        unit: editProductData?.unit || 'pcs',
         costPrice: editProductData?.costPrice || '',
         sellingPrice: editProductData?.sellingPrice || '',
         color: editProductData?.color || '',
@@ -396,11 +421,31 @@ const AddProduct = () => {
 
     // Handler to save a new value for a custom attribute
     const handleSaveAttributeValue = async () => {
+
         const { attribute, inputVal } = addValueModal;
-        if (!inputVal.trim()) return;
+        const value = inputVal.trim();
+
+        // Numbers only are not allowed; text, or text with numbers, is fine
+        if (!/\p{L}/u.test(value) || hasSpecialCharacters(value)) {
+            showToast('Error', 'Value cannot be numbers only. Use letters, or letters with numbers.', 'error');
+            return;
+        }
+
         setAddValueModal(prev => ({ ...prev, saving: true }));
 
         const fieldName = (attribute.labelName || '').toLowerCase().replace(/\s+/g, '_');
+
+        // DEF_009: Prevent duplicate values
+        const existingOptions = attributeOptions[fieldName] || [];
+        const isDuplicate = existingOptions.some(
+            existingValue => existingValue.trim().toLowerCase() === value.toLowerCase()
+        );
+
+        if (isDuplicate) {
+            showToast('Error', 'This attribute value already exists.', 'error');
+            setAddValueModal(prev => ({ ...prev, saving: false }));
+            return;
+        }
 
         try {
             const categoryLower = basicDetails.category?.toLowerCase();
@@ -421,13 +466,7 @@ const AddProduct = () => {
             setCustomAttributeValues(prev => ({ ...prev, [fieldName]: newVal }));
             showToast('Success', `"${newVal}" added to ${attribute.labelName}!`, 'success');
         } catch (err) {
-            const newVal = inputVal.trim();
-            setAttributeOptions(prev => ({
-                ...prev,
-                [fieldName]: [...(prev[fieldName] || []), newVal]
-            }));
-            setCustomAttributeValues(prev => ({ ...prev, [fieldName]: newVal }));
-            showToast('Warning', `"${newVal}" added locally.`, 'warning');
+            showToast('Error', err.message || `Failed to add "${inputVal.trim()}" to ${attribute.labelName}.`, 'error');
         } finally {
             setAddValueModal({ open: false, attribute: null, inputVal: '', saving: false });
         }
@@ -479,13 +518,14 @@ const AddProduct = () => {
 
             setProductAttributes(prev => ({
                 quantity: prev.quantity,
+                unit: prev.unit || 'pcs',
                 costPrice: prev.costPrice,
                 sellingPrice: prev.sellingPrice,
                 color: prev.color,
                 size: prev.size,
                 barcode: '',
                 ...Object.keys(prev).reduce((acc, key) => {
-                    if (!['quantity', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(key)) {
+                    if (!['quantity', 'unit', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(key)) {
                         acc[key] = '';
                     }
                     return acc;
@@ -502,19 +542,80 @@ const AddProduct = () => {
     };
 
     const handleAttributesChange = (field, value) => {
-        const isCustomAttribute = !['quantity', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode'].includes(field);
+        if (field === 'unit') {
+            const currentQty = String(productAttributes.quantity ?? '');
+            const newQty = isWholeNumberUnit(value) ? currentQty.split('.')[0] : currentQty;
+            setProductAttributes(prev => ({ ...prev, unit: value, quantity: newQty }));
+            if (newQty !== '') {
+                setAttributeValidationErrors(prev => ({ ...prev, quantity: getQuantityError(newQty, value) }));
+            }
+            return;
+        }
+        let filteredValue = value;
+        if (['quantity', 'costPrice', 'sellingPrice'].includes(field)) {
+            // Remove negative signs, letters, and special characters
+            filteredValue = filteredValue.replace(/[^0-9.]/g, '');
+            // Prevent multiple decimals
+            const parts = filteredValue.split('.');
+            if (parts.length > 2) {
+                filteredValue = parts[0] + '.' + parts.slice(1).join('');
+            }
+            // Block exactly '0' while typing
+            if (filteredValue === '0') {
+                filteredValue = '';
+            }
+        }
+        if (field === 'quantity') {
+            // Numbers of 1 and above, decimals allowed: drop everything except digits and a single decimal point
+            const wholeOnly = isWholeNumberUnit(productAttributes.unit);
+            let cleaned = value.replace(wholeOnly ? /[^\d]/g : /[^\d.]/g, '');
 
-        if (value.trim() !== '') {
-            setAttributeValidationErrors(prev => ({ ...prev, [field]: '' }));
+            const firstDot = cleaned.indexOf('.');
+
+            if (firstDot !== -1) {
+                // Keep only the first decimal point; strip any extra ones
+                cleaned =
+                    cleaned.slice(0, firstDot + 1) +
+                    cleaned.slice(firstDot + 1).replace(/\./g, '');
+            }
+
+            // Collapse leading zeros (e.g. "007" -> "7") but keep a leading "0." as typed (e.g. "0.5")
+            cleaned = cleaned.replace(/^0+(?=\d)/, '');
+
+            setAttributeValidationErrors(prev => ({
+                ...prev,
+                quantity: getQuantityError(cleaned, productAttributes.unit)
+            }));
+
+            setProductAttributes(prev => ({
+                ...prev,
+                quantity: cleaned
+            }));
+
+            return;
+        }
+
+        const isCustomAttribute =
+            !['quantity', 'unit', 'costPrice', 'sellingPrice', 'color', 'size', 'barcode']
+                .includes(field);
+
+        if (filteredValue.trim() !== '') {
+            setAttributeValidationErrors(prev => ({
+                ...prev,
+                [field]: ''
+            }));
         }
 
         if (isCustomAttribute) {
             setCustomAttributeValues(prev => ({
                 ...prev,
-                [field]: value
+                [field]: filteredValue
             }));
         } else {
-            setProductAttributes(prev => ({ ...prev, [field]: value }));
+            setProductAttributes(prev => ({
+                ...prev,
+                [field]: filteredValue
+            }));
         }
     };
 
@@ -526,12 +627,12 @@ const AddProduct = () => {
             const newProduct = {
                 ...pendingProduct,
                 barcode: generatedBarcode,
-                status: parseInt(pendingProduct.quantity) === 0 ? 'Out of stock' :
-                    parseInt(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
+                status: parseFloat(pendingProduct.quantity) === 0 ? 'Out of stock' :
+                    parseFloat(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
             };
 
             setAddedProducts(prev => [...prev, newProduct]);
-            setProductAttributes({ quantity: '', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
+            setProductAttributes({ quantity: '', unit: 'pcs', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
             setCustomAttributeValues({});
             setBarcodePopupOpen(false);
             setPendingProduct(null);
@@ -540,17 +641,37 @@ const AddProduct = () => {
     };
 
     const handleAddBarcode = (barcodeValue) => {
-        if (pendingProduct && barcodeValue.trim() !== '') {
+        const normalizedBarcode = String(barcodeValue || '').trim();
+        if (pendingProduct && normalizedBarcode !== '') {
+            const BARCODE_PATTERN = /^[A-Za-z0-9]+$/;
+            if (!BARCODE_PATTERN.test(normalizedBarcode)) {
+                return 'Barcode can contain only letters and numbers.';
+            }
+            if (/^\d+$/.test(normalizedBarcode)) {
+                return 'Barcode cannot be numbers only. Use letters together with numbers.';
+            }
+            if (/^[A-Za-z]+$/.test(normalizedBarcode)) {
+                return 'Barcode cannot be letters only. Use numbers together with letters.';
+            }
+
+            // DEF_025: Local duplicate check
+            const existsLocally = addedProducts.some(
+                product => String(product.barcode || '').trim().toLowerCase() === normalizedBarcode.toLowerCase()
+            );
+            if (existsLocally) {
+                return 'Barcode already exists. Please use a unique barcode.';
+            }
+
             setBarcodeMode('custom');
             const newProduct = {
                 ...pendingProduct,
-                barcode: barcodeValue.trim(),
-                status: parseInt(pendingProduct.quantity) === 0 ? 'Out of stock' :
-                    parseInt(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
+                barcode: normalizedBarcode,
+                status: parseFloat(pendingProduct.quantity) === 0 ? 'Out of stock' :
+                    parseFloat(pendingProduct.quantity) <= 10 ? 'Low stock' : 'In stock'
             };
 
             setAddedProducts(prev => [...prev, newProduct]);
-            setProductAttributes({ quantity: '', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
+            setProductAttributes({ quantity: '', unit: 'pcs', costPrice: '', sellingPrice: '', color: '', size: '', barcode: '' });
             setCustomAttributeValues({});
             setAddBarcodePopupOpen(false);
             setPendingProduct(null);
@@ -580,9 +701,44 @@ const AddProduct = () => {
                 .filter(attr => attr.alwaysShow && !(productAttributes[attr.fieldName] || customAttributeValues[attr.fieldName] || '').trim())
                 .reduce((errors, attr) => ({
                     ...errors,
-                    [attr.fieldName]: `* Please enter ${attr.labelName}`
+                    [attr.fieldName]: attr.fieldName === 'quantity'
+                        ? '* Quantity cannot be empty'
+                        : `* Please enter ${attr.labelName}`
                 }), {});
             setAttributeValidationErrors(missingAttributes);
+            return;
+        }
+        const quantityError = getQuantityError(productAttributes.quantity, productAttributes.unit);
+        if (quantityError) {
+            setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
+            return;
+        }
+
+        const qtyValue = Number(productAttributes.quantity);
+        const cpValue = Number(productAttributes.costPrice);
+        const spValue = Number(productAttributes.sellingPrice);
+
+        const newErrors = {};
+
+        if (!Number.isFinite(qtyValue) || qtyValue < 0.1) {
+            newErrors.quantity = 'Quantity must be at least 0.1.';
+        }
+
+        if (!Number.isFinite(cpValue) || cpValue < 0.1) {
+            newErrors.costPrice = 'Cost price must be at least 0.1.';
+        }
+
+        if (!Number.isFinite(spValue) || spValue < 0.1) {
+            newErrors.sellingPrice = 'Selling price must be at least 0.1.';
+        }
+
+        const decimalUnits = ['kg', 'g', 'L', 'ml'];
+        if (Number.isFinite(qtyValue) && !decimalUnits.includes(productAttributes.unit || 'pcs') && !Number.isInteger(qtyValue)) {
+            newErrors.quantity = 'Please enter a whole number for this unit.';
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setAttributeValidationErrors(newErrors);
             return;
         }
 
@@ -631,6 +787,12 @@ const AddProduct = () => {
 
             if (validationErrors.length > 0) {
                 showToast('Validation Error', `Please fill in all required fields: ${validationErrors.join(', ')}`, 'warning');
+                return;
+            }
+
+            const quantityError = getQuantityError(productAttributes.quantity, productAttributes.unit);
+            if (quantityError) {
+                setAttributeValidationErrors(prev => ({ ...prev, quantity: quantityError }));
                 return;
             }
             setViewProductOpen(true);
@@ -697,7 +859,8 @@ const AddProduct = () => {
                     name: basicDetails.name,
                     description: basicDetails.description || '',
                     category_id: finalCategoryId,
-                    quantity: parseInt(productAttributes.quantity),
+                    quantity: parseFloat(productAttributes.quantity),
+                    unit: productAttributes.unit || 'pcs',
                     cost_price: parseFloat(productAttributes.costPrice || 0),
                     selling_price: parseFloat(productAttributes.sellingPrice),
                 };
@@ -739,7 +902,8 @@ const AddProduct = () => {
                     const sizeId = getSizeIdByName(product.size, sizesRaw);
 
                     const variation = {
-                        quantity: parseInt(product.quantity),
+                        quantity: parseFloat(product.quantity),
+                        unit: product.unit || 'pcs',
                         cost_price: parseFloat(product.costPrice || 0),
                         selling_price: parseFloat(product.sellingPrice),
                     };
@@ -845,6 +1009,13 @@ const AddProduct = () => {
                 handleCloseNewProductModal();
             }
         } else {
+            if (newProductModalType === 'color' &&
+                colors.some(c => c.trim().toLowerCase() === capitalized.trim().toLowerCase())) {
+                showToast('Warning', `Color "${capitalized}" already exists. Please select it from the list.`, 'warning');
+                handleCloseNewProductModal();
+                return;
+            }
+
             try {
                 if (newProductModalType === 'color') {
                     await createColor(capitalized);
@@ -857,12 +1028,9 @@ const AddProduct = () => {
                 }
             } catch (error) {
                 console.error(`Failed to create ${newProductModalType}:`, error);
-                showToast('Error', `Failed to create ${newProductModalType}. Please try again.`, 'error');
+                showToast('Error', error.message || `Failed to create ${newProductModalType}. Please try again.`, 'error');
 
-                if (newProductModalType === 'color') {
-                    setColors(prev => [...prev, capitalized]);
-                    handleAttributesChange('color', capitalized);
-                } else if (newProductModalType === 'size') {
+                if (newProductModalType === 'size') {
                     setSizes(prev => [...prev, capitalized]);
                     handleAttributesChange('size', capitalized);
                 }
@@ -960,10 +1128,19 @@ const AddProduct = () => {
                 </div>
             );
         } else if (attribute.isCustom) {
-            const options = attributeOptions[fieldName] || [];
-            const loading = attributeOptionsLoading[fieldName] || false;
-            const selectedVal = customAttributeValues[fieldName] || '';
+            // A custom attribute named Color/Size is backed by the shared colours/sizes lists
+            // (the product save resolves color_id / size_id from them), so use those here.
+            const usesGlobalList = fieldName === 'color' || fieldName === 'size';
+            const loading = usesGlobalList
+                ? (fieldName === 'color' ? loadingColors : loadingSizes)
+                : (attributeOptionsLoading[fieldName] || false);
+            const selectedVal = usesGlobalList
+                ? (productAttributes[fieldName] || '')
+                : (customAttributeValues[fieldName] || '');
             const placeholder = loading ? "Loading..." : `Select ${labelName.toLowerCase()}`;
+            const handleAddClick = () => usesGlobalList
+                ? handleOpenNewProductModal(fieldName)
+                : handleOpenAddValueModal(attribute);
 
             return (
                 <div className={`form-group ${fieldName}-field`}>
@@ -982,7 +1159,7 @@ const AddProduct = () => {
                             <img src={dropdownIcon} alt="Dropdown" className="dropdown-icon custom-attr-dropdown-icon" />
                         </div>
                         <AddButton
-                            onClick={() => handleOpenAddValueModal(attribute)}
+                            onClick={handleAddClick}
                             title={`Add new ${labelName}`}
                             className="custom-attr-add-btn"
                         />
@@ -997,14 +1174,63 @@ const AddProduct = () => {
             const placeholder = `Type your ${labelName.toLowerCase()}`;
             const onChange = (e) => handleAttributesChange(fieldName, e.target.value);
 
+            if (fieldName === 'quantity') {
+                return (
+                    <div className={`form-group ${fieldName}-field`}>
+                        <label>{labelName}</label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <input
+                                type={type === 'number' ? 'number' : 'text'}
+                                min={fieldName === 'quantity' ? "0.1" : undefined}
+                                placeholder={placeholder}
+                                value={value}
+                                onChange={onChange}
+                                step={isWholeNumberUnit(productAttributes.unit) ? '1' : 'any'}
+                                onKeyDown={(e) => {
+                                    const blocked = isWholeNumberUnit(productAttributes.unit) ? ['-', '+', 'e', 'E', '.'] : ['-', '+', 'e', 'E'];
+                                    if (blocked.includes(e.key)) e.preventDefault();
+                                }}
+                                onPaste={(e) => {
+                                    const pattern = isWholeNumberUnit(productAttributes.unit) ? /[-+eE.]/ : /[-+eE]/;
+                                    if (pattern.test(e.clipboardData.getData('text'))) e.preventDefault();
+                                }}
+                                className="form-input"
+                                style={{ flex: 1 }}
+                            />
+                            <select
+                                value={productAttributes.unit || 'pcs'}
+                                onChange={(e) => handleAttributesChange('unit', e.target.value)}
+                                className="form-input"
+                                style={{ width: '80px', padding: '0 10px', backgroundColor: '#f7fbff' }}
+                            >
+                                <option value="pcs">pcs</option>
+                                <option value="kg">kg</option>
+                                <option value="g">g</option>
+                                <option value="L">L</option>
+                                <option value="ml">ml</option>
+                                <option value="box">box</option>
+                                <option value="pack">pack</option>
+                            </select>
+                        </div>
+                        {attributeValidationErrors[fieldName] && (
+                            <span className="validation-error">{attributeValidationErrors[fieldName]}</span>
+                        )}
+                    </div>
+                );
+            }
+
             return (
                 <div className={`form-group ${fieldName}-field`}>
                     <label>{labelName}</label>
                     <input
                         type={type === 'number' ? 'number' : 'text'}
+                        inputMode={fieldName === 'quantity' ? 'decimal' : undefined}
+                        min={['costPrice', 'sellingPrice', 'quantity'].includes(fieldName) ? '0.1' : undefined}
+                        step={['costPrice', 'sellingPrice'].includes(fieldName) ? '0.01' : undefined}
                         placeholder={placeholder}
                         value={value}
                         onChange={onChange}
+                        onKeyDown={(e) => type === 'number' && ['-', '+', 'e', 'E'].includes(e.key) && e.preventDefault()}
                         className="form-input"
                     />
                     {attributeValidationErrors[fieldName] && (
@@ -1033,6 +1259,7 @@ const AddProduct = () => {
                     color: productAttributes.color,
                     size: productAttributes.size,
                     quantity: productAttributes.quantity,
+                    unit: productAttributes.unit || 'pcs',
                     sellingPrice: productAttributes.sellingPrice,
                     costPrice: productAttributes.costPrice,
                     customAttributes: { ...customAttributeValues },
@@ -1049,7 +1276,7 @@ const AddProduct = () => {
                 addedProducts: addedProducts.map(p => {
                     const customAttrs = p.customAttributes ? { ...p.customAttributes } : {};
                     Object.keys(p).forEach(key => {
-                        if (!['id', 'name', 'category', 'description', 'color', 'size', 'quantity', 'sellingPrice', 'costPrice', 'barcode', 'status', 'customAttributes'].includes(key)) {
+                        if (!['id', 'name', 'category', 'description', 'color', 'size', 'quantity', 'unit', 'sellingPrice', 'costPrice', 'barcode', 'status', 'customAttributes'].includes(key)) {
                             customAttrs[key] = p[key];
                         }
                     });
@@ -1058,6 +1285,7 @@ const AddProduct = () => {
                         color: p.color,
                         size: p.size,
                         quantity: p.quantity,
+                        unit: p.unit || 'pcs',
                         sellingPrice: p.sellingPrice,
                         costPrice: p.costPrice,
                         customAttributes: customAttrs,
@@ -1093,43 +1321,64 @@ const AddProduct = () => {
         const categoryLower = basicDetails.category.toLowerCase();
         const currentAttrs = categoryCustomAttributes[categoryLower] || [];
 
-        const updatedAttrs = [...currentAttrs, ...newAttributes];
+        // Skip labels that are already in the list (case-insensitive)
+        const knownLabels = new Set(currentAttrs.map(a => (a.labelName || '').toLowerCase()));
+        const attrsToAdd = newAttributes.filter(attr => {
+            const key = (attr.labelName || '').trim().toLowerCase();
+            if (!key || knownLabels.has(key)) return false;
+            knownLabels.add(key);
+            return true;
+        });
 
+        if (attrsToAdd.length === 0) {
+            showToast('Warning', 'These attributes already exist for this category.', 'warning');
+            setAddAttributesOpen(false);
+            return;
+        }
+
+        // Show the new attributes in the list immediately
         setCategoryCustomAttributes(prev => ({
             ...prev,
-            [categoryLower]: updatedAttrs
+            [categoryLower]: [...(prev[categoryLower] || []), ...attrsToAdd]
         }));
 
         try {
-            const categoryId = window._newCategoryId;
+            const catObj = categoriesRaw.find(c =>
+                (c.name || c.category_name || '').toLowerCase() === categoryLower
+            );
+            const categoryId = catObj?.id || window._newCategoryId;
+
             if (categoryId) {
-                const attributesForDb = newAttributes.map(attr => ({
-                    attribute_name: attr.labelName,
+                const attributesForDb = attrsToAdd.map(attr => ({
+                    attribute_name: attr.labelName.trim(),
                     attribute_type: attr.type || 'text',
                     is_required: true
                 }));
 
-                const savedAttrs = await createAttributesBulk(categoryId, attributesForDb);
-                showToast('Success', `${newAttributes.length} custom attribute(s) saved to database!`, 'success');
+                await createAttributesBulk(categoryId, attributesForDb);
+                showToast('Success', `${attrsToAdd.length} custom attribute(s) saved to database!`, 'success');
 
-                if (savedAttrs && savedAttrs.length > 0) {
-                    const attrsWithIds = updatedAttrs.map(attr => {
-                        const dbAttr = savedAttrs.find(
-                            sa => sa.attribute_name?.toLowerCase() === attr.labelName?.toLowerCase()
-                        );
-                        return dbAttr ? { ...attr, id: dbAttr.id } : attr;
+                // Re-sync with the server so the list carries the real attribute ids
+                const serverAttrs = normalizeCategoryAttributeDefinitions(await getCategoryAttributes(categoryId));
+                if (serverAttrs.length > 0) {
+                    setCategoryCustomAttributes(prev => {
+                        const merged = [...(prev[categoryLower] || [])];
+                        serverAttrs.forEach(attr => {
+                            const idx = merged.findIndex(existing =>
+                                (existing.labelName || '').toLowerCase() === (attr.labelName || '').toLowerCase()
+                            );
+                            if (idx >= 0) merged[idx] = { ...merged[idx], ...attr };
+                            else merged.push(attr);
+                        });
+                        return { ...prev, [categoryLower]: merged };
                     });
-                    setCategoryCustomAttributes(prev => ({
-                        ...prev,
-                        [categoryLower]: attrsWithIds
-                    }));
                 }
             } else {
-                showToast('Success', `${newAttributes.length} custom attribute(s) added locally!`, 'success');
+                showToast('Success', `${attrsToAdd.length} custom attribute(s) added locally!`, 'success');
             }
         } catch (error) {
             console.error('Failed to save attributes to database:', error);
-            showToast('Warning', 'Attributes saved locally but failed to save to database.', 'warning');
+            showToast('Warning', error.message || 'Attributes saved locally but failed to save to database.', 'warning');
         }
 
         setAddAttributesOpen(false);
@@ -1166,6 +1415,7 @@ const AddProduct = () => {
                                         value={basicDetails.name}
                                         onChange={(e) => handleBasicDetailsChange('name', e.target.value)}
                                         className="form-input"
+                                        maxLength={255}
                                     />
                                     {validationErrors.name && (
                                         <span className="validation-error">{validationErrors.name}</span>
@@ -1310,7 +1560,7 @@ const AddProduct = () => {
                                                             <img src={quantityIcon} alt="Quantity" className="attr-icon" />
                                                             <div className="attr-details">
                                                                 <span className="attr-label">Quantity</span>
-                                                                <span className="attr-value">{product.quantity}</span>
+                                                                <span className="attr-value">{product.quantity} {product.unit || 'pcs'}</span>
                                                             </div>
                                                         </div>
                                                     )}
@@ -1429,7 +1679,7 @@ const AddProduct = () => {
                                     placeholder={`Type your ${addValueModal.attribute?.labelName?.toLowerCase()}`}
                                     value={addValueModal.inputVal}
                                     autoFocus
-                                    onChange={e => setAddValueModal(prev => ({ ...prev, inputVal: e.target.value }))}
+                                    onChange={e => setAddValueModal(prev => ({ ...prev, inputVal: stripSpecialCharacters(e.target.value) }))}
                                     onKeyDown={e => { if (e.key === 'Enter') handleSaveAttributeValue(); }}
                                     disabled={addValueModal.saving}
                                 />

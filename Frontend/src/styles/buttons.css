@@ -91,3 +91,35 @@
   height: 40px;
   cursor: pointer;
 }
+
+.btn-check-balance,
+.btn-signin,
+.btn-save,
+.btn-process-order {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .btn-check-balance,
+  .btn-signin,
+  .btn-save {
+    width: 100%;
+  }
+
+  .btn-next {
+    width: 100%;
+    max-width: 210px;
+  }
+
+  .btn-logout {
+    right: 16px;
+    top: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn {
+    font-size: 14px;
+  }
+}

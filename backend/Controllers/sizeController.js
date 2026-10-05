@@ -14,6 +14,12 @@ exports.createSize = async (req, res) => {
 
         size = size.trim();
 
+        if (/[^\p{L}\p{N} ]/u.test(size)) {
+            return res.status(400).json({
+                error: "Size may only contain letters, numbers and spaces."
+            });
+        }
+
         // Check duplicate
         const existingSize = await Size.findOne({
             where: { size }

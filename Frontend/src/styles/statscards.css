@@ -48,3 +48,33 @@
   margin: 0;
   line-height: 1.2;
 }
+
+@media (max-width: 1024px) {
+  .stats-cards-container {
+    gap: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-cards-container {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-cards-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .stats-title {
+    font-size: 12px;
+  }
+
+  .stats-value {
+    font-size: 18px;
+  }
+}

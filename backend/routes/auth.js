@@ -7,6 +7,7 @@ router.post("/login", authController.login);
 router.post("/refresh-token", authController.refreshToken);
 router.post("/logout", authController.logout);
 
+router.post("/check-email-registered", authController.checkEmailRegistered);
 router.post("/send-password-reset-otp", authController.sendPasswordResetOTP);
 router.post("/verify-otp", authController.verifyOTP);
 router.post("/reset-password-otp", authController.resetPasswordWithOTP);

@@ -1,6 +1,6 @@
 // Developed by M.Vaishnavi | Start: 01/4 | End: 02/4
 
-const { Color } = require("../models"); // Import the Color model
+const { Color, sequelize } = require("../models"); // Import the Color model and Sequelize instance
 
 // Create a new color
 // exports.createColor = async (req, res) => {
@@ -25,22 +25,31 @@ const { Color } = require("../models"); // Import the Color model
 
 exports.createColor = async (req, res) => {
   try {
-    const { colour_name } = req.body;
 
-    if (!colour_name) {
-      return res.status(400).json({ error: "Colour name is required" });
+    const colourName = String(req.body.colour_name ?? '').trim();
+
+    if (!colourName || /[^\p{L}\p{N} ]/u.test(colourName)) {
+      return res.status(400).json({
+        error: 'Colour name may only contain letters, numbers and spaces'
+      });
     }
 
-    // Check if the color already exists
-    const existingColor = await Color.findOne({ where: { colour_name } });
+    const existingColor = await Color.findOne({
+      where: sequelize.where(
+        sequelize.fn('LOWER', sequelize.col('colour_name')),
+        colourName.toLowerCase()
+      )
+    });
 
     if (existingColor) {
-      return res.status(400).json({ error: "Colour already exists" });
+      return res.status(409).json({
+        error: 'Colour already exists'
+      });
     }
 
-    // ✅ Use the color name from the request body
+    // ✅ Use the trimmed color name from the request body
     const newColor = await Color.create({
-      colour_name,
+      colour_name: colourName,
       created_at: new Date(),
       updated_at: new Date(),
     });

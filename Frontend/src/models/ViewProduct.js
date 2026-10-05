@@ -155,7 +155,7 @@ const ViewProduct = ({ isOpen, onClose, addedProducts, basicDetails, onNext, onD
         if (!product) return {};
         const combined = { ...(product.customAttributes || {}) };
         const standardKeys = [
-            'id', 'variantKey', 'color', 'size', 'quantity', 'sellingPrice',
+            'id', 'variantKey', 'color', 'size', 'quantity', 'unit', 'sellingPrice',
             'costPrice', 'barcode', 'name', 'category', 'description', 'customAttributes',
             'status', 'created_at', 'priceId', 'category_id', 'color_id', 'size_id'
         ];
@@ -274,7 +274,7 @@ const ViewProduct = ({ isOpen, onClose, addedProducts, basicDetails, onNext, onD
                                                         })()}
                                                         
                                                         {/* Always show quantity */}
-                                                        {renderProductAttribute(product, quantityIcon, 'Quantity', product.quantity, true)}
+                                                        {renderProductAttribute(product, quantityIcon, 'Quantity', `${product.quantity} ${product.unit || 'pcs'}`, true)}
                                                         
                                                         {/* Always show selling price */}
                                                         {renderProductAttribute(product, priceIcon, 'Price', `Rs ${product.sellingPrice}`, true)}

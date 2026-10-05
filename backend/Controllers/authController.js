@@ -262,6 +262,41 @@ exports.logout = async (req, res) => {
 };
 
 // -------------------- SEND OTP FOR PASSWORD RESET --------------------
+exports.checkEmailRegistered = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const user = await User.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        registered: false,
+        message: "Unregistered Email, Cannot Proceed",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      registered: true,
+      message: "Email is registered",
+    });
+  } catch (error) {
+    console.error("Check email registered error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to verify email. Please try again.",
+    });
+  }
+};
+
 exports.sendPasswordResetOTP = async (req, res) => {
   try {
     const { email } = req.body;
